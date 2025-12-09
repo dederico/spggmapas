@@ -122,6 +122,11 @@
 
   <script src="vendor/leaflet.js"></script>
   <script>
+    // Config remota para persistencia
+    window.API_BASE = 'https://api-mapas-pqoi.onrender.com';
+    window.API_KEY = 'mapas_spgg';
+  </script>
+  <script>
     // Asegura que Leaflet busque los íconos en la carpeta local
     L.Icon.Default.imagePath = 'vendor/images/';
 
@@ -132,6 +137,10 @@
       azul: '#1d4ed8'
     };
     const STORAGE_KEY = 'san_pedro_predios_v1';
+    // Endpoint opcional para persistencia remota (ej. API sobre tu DB en Render).
+    // Define window.API_BASE y window.API_KEY en un <script> aparte o como env inyectadas.
+    const API_BASE = window.API_BASE || '';
+    const API_KEY = window.API_KEY || '';
 
     const map = L.map('map');
     const base = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -189,6 +198,53 @@
     }
 
     const statusById = loadStatus();
+    let remoteSyncInFlight = false;
+
+    async function fetchJSON(url, options = {}) {
+      const headers = options.headers || {};
+      if (API_KEY) headers.Authorization = `Bearer ${API_KEY}`;
+      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+      const res = await fetch(url, { ...options, headers });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+
+    async function loadRemoteStatuses() {
+      if (!API_BASE) return;
+      if (remoteSyncInFlight) return;
+      remoteSyncInFlight = true;
+      try {
+        const seccionesParam = allowedSecciones && allowedSecciones.size ? `?secciones=${[...allowedSecciones].join(',')}` : '';
+        const data = await fetchJSON(`${API_BASE}/predios${seccionesParam}`, { method: 'GET' });
+        if (Array.isArray(data)) {
+          for (const row of data) {
+            if (!row.id_predio) continue;
+            const st = row.status;
+            if (st === 'rojo' || st === 'azul' || st === 'neutral') {
+              statusById[row.id_predio] = st;
+            }
+          }
+          saveStatus(statusById); // cache local para offline
+          if (geoLayer) updateStats(geoLayer);
+        }
+      } catch (err) {
+        console.warn('No se pudo sincronizar estados remotos', err);
+      } finally {
+        remoteSyncInFlight = false;
+      }
+    }
+
+    async function saveRemoteStatus(id, status) {
+      if (!API_BASE || !id) return;
+      try {
+        await fetchJSON(`${API_BASE}/predios`, {
+          method: 'POST',
+          body: JSON.stringify({ id_predio: id, status })
+        });
+      } catch (err) {
+        console.warn('No se pudo guardar remoto', err);
+      }
+    }
 
     function isAdmin() {
       return currentUser && currentUser.role === 'admin';
@@ -437,6 +493,7 @@
                 statusById[id] = next;
                 l.setStyle(styleFeature(feature));
                 saveStatus(statusById);
+                saveRemoteStatus(id, next);
                 updateStats(geoLayer);
               });
               const name = feature.properties?.ubicacion || '';
@@ -637,6 +694,7 @@
       userStatus.textContent = allowedSecciones ? `Usuario: ${u} · Secciones: ${[...allowedSecciones].join(',')}` : `Usuario: ${u} · Todas las secciones`;
       userStatus.style.color = '#065f46';
       applySeccionFilter();
+      loadRemoteStatuses();
     }
     loginBtn.addEventListener('click', handleLogin);
 
