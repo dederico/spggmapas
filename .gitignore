@@ -1,3 +1,6 @@
 # Ignorar datos pesados opcionales
 data/bgd/
 bgd_19_Shapefile(2).zip
+node_modules
+api/node_modules
+api/package-lock.json
