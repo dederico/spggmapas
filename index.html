@@ -234,12 +234,12 @@
       }
     }
 
-    async function saveRemoteStatus(id, status) {
+    async function saveRemoteStatus(id, status, seccion = null) {
       if (!API_BASE || !id) return;
       try {
         await fetchJSON(`${API_BASE}/predios`, {
           method: 'POST',
-          body: JSON.stringify({ id_predio: id, status })
+          body: JSON.stringify({ id_predio: id, status, seccion })
         });
       } catch (err) {
         console.warn('No se pudo guardar remoto', err);
@@ -493,7 +493,7 @@
                 statusById[id] = next;
                 l.setStyle(styleFeature(feature));
                 saveStatus(statusById);
-                saveRemoteStatus(id, next);
+                saveRemoteStatus(id, next, seccion || null);
                 updateStats(geoLayer);
               });
               const name = feature.properties?.ubicacion || '';
