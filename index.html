@@ -71,6 +71,21 @@
       line-height: 1.05;
       pointer-events: none;
     }
+
+    .user-icon {
+      display: grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #2563eb;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 800;
+      border: 2px solid #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      transform: translate(-13px, -13px);
+    }
   </style>
 </head>
 <body>
@@ -194,7 +209,13 @@
     function updateUserLocation(latlng, accuracy) {
       if (userLocMarker) map.removeLayer(userLocMarker);
       if (userLocCircle) map.removeLayer(userLocCircle);
-      userLocMarker = L.marker(latlng, { title: 'Tu ubicación' }).addTo(map);
+      const userIcon = L.divIcon({
+        className: 'user-icon',
+        html: '📍',
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+      });
+      userLocMarker = L.marker(latlng, { title: 'Tu ubicación', icon: userIcon }).addTo(map);
       const radius = Math.max(accuracy || 20, NEARBY_RADIUS_METERS);
       userLocCircle = L.circle(latlng, { radius, color: '#2563eb', weight: 2, fillOpacity: 0.1 }).addTo(map);
     }
@@ -312,9 +333,12 @@
 
     function updateStats(layer) {
       const statEl = document.getElementById('stat');
+      const seen = new Set();
       const counts = { rojo: 0, azul: 0 };
       layer.eachLayer(l => {
         const id = l.feature?.properties?.clave_lote || l.feature?.properties?.id || l.feature?.id;
+        if (seen.has(id)) return;
+        seen.add(id);
         const status = statusById[id] || 'neutral';
         if (status === 'rojo') counts.rojo += 1;
         if (status === 'azul') counts.azul += 1;
