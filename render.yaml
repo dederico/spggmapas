@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: recorridos_spgg
+    env: static
+    buildCommand: ""
+    staticPublishPath: .
+    pullRequestPreviewsEnabled: false
