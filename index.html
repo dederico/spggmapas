@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>San Pedro – Predio por predio</title>
+  <link rel="stylesheet" href="vendor/leaflet.css">
+  <style>
+    html, body { height: 100%; margin: 0; font-family: Arial, sans-serif; }
+    #map { height: 100vh; width: 100%; }
+    .panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(255, 255, 255, 0.92);
+      padding: 10px 12px;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+      z-index: 1000;
+      max-width: 260px;
+      line-height: 1.35;
+    }
+    @media (max-width: 640px) {
+      .panel {
+        top: auto;
+        bottom: 12px;
+        left: 12px;
+        right: 12px;
+        max-width: none;
+      }
+    }
+    .panel h2 {
+      margin: 0 0 6px 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .panel .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+      font-size: 13px;
+    }
+    .swatch {
+      width: 18px;
+      height: 12px;
+      border-radius: 4px;
+      border: 1px solid #999;
+    }
+    .stat {
+      font-size: 13px;
+      margin-top: 6px;
+      color: #333;
+    }
+    .footer {
+      font-size: 11px;
+      color: #666;
+      margin-top: 6px;
+    }
+    .label-casa {
+      font-size: 16px;
+      font-weight: 900;
+      color: #0b162e;
+      background: rgba(255,255,255,0.96);
+      border: 1.5px solid rgba(15,23,42,0.8);
+      border-radius: 5px;
+      padding: 3px 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.32);
+      text-shadow: 0 0 1px rgba(255,255,255,0.95), 0 0 6px rgba(0,0,0,0.35);
+      letter-spacing: 0.15px;
+      line-height: 1.05;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="panel" id="panel">
+    <h2 style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <span>Predios San Pedro</span>
+      <button id="togglePanel" style="font-size:12px;padding:4px 8px;border:1px solid #ccc;border-radius:6px;background:#fff;">Ocultar</button>
+    </h2>
+    <div id="panelBody">
+      <div style="margin-bottom:8px;">
+        <label style="font-size:12px;display:block;margin-bottom:4px;">Usuario / Sección</label>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <input id="userInput" style="flex:1;min-width:90px;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;" placeholder="usuario demo">
+          <input id="passInput" type="password" style="flex:1;min-width:90px;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;" placeholder="clave demo">
+          <button id="loginBtn" style="font-size:12px;padding:6px 10px;border:1px solid #2563eb;color:#fff;background:#2563eb;border-radius:6px;">Entrar</button>
+        </div>
+        <div id="userStatus" style="font-size:12px;color:#065f46;margin-top:4px;"></div>
+        <div id="geoStatus" style="font-size:12px;color:#b45309;margin-top:4px;">Candado geográfico: verificando...</div>
+      </div>
+      <div class="legend-row"><span class="swatch" style="background:#9ca3af"></span>Sin marcar</div>
+      <div class="legend-row"><span class="swatch" style="background:#e63946"></span>Rojo (opción 1)</div>
+      <div class="legend-row"><span class="swatch" style="background:#1d4ed8"></span>Azul (opción 2)</div>
+      <div class="stat" id="stat"></div>
+      <div class="footer">Toca un predio para alternar rojo/azul. Se guarda en este navegador.</div>
+      <div class="legend-row" style="margin-top:8px;">
+        <input type="checkbox" id="toggleNumbers" checked style="margin:0;">
+        <label for="toggleNumbers" style="font-size:12px; cursor:pointer;">Mostrar número al acercar (zoom &ge; 17)</label>
+      </div>
+      <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/leaflet.js"></script>
+  <script>
+    // Asegura que Leaflet busque los íconos en la carpeta local
+    L.Icon.Default.imagePath = 'vendor/images/';
+
+    const CENTER = [25.6608, -100.36]; // San Pedro centro aproximado
+    const STATUS_COLORS = {
+      neutral: '#9ca3af',
+      rojo: '#e63946',
+      azul: '#1d4ed8'
+    };
+    const STORAGE_KEY = 'san_pedro_predios_v1';
+
+    const map = L.map('map');
+    const base = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap'
+    });
+    base.addTo(map);
+    const layerControl = L.control.layers({ 'OSM': base }, {}, { collapsed: true }).addTo(map);
+
+    map.setView(CENTER, 14.5);
+
+    const toggleBtn = document.getElementById('togglePanel');
+    const panelBody = document.getElementById('panelBody');
+    const userInput = document.getElementById('userInput');
+    const passInput = document.getElementById('passInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const userStatus = document.getElementById('userStatus');
+    const geoStatus = document.getElementById('geoStatus');
+    const toggleNumbers = document.getElementById('toggleNumbers');
+    let panelVisible = true;
+    toggleBtn.addEventListener('click', () => {
+      panelVisible = !panelVisible;
+      panelBody.style.display = panelVisible ? 'block' : 'none';
+      toggleBtn.textContent = panelVisible ? 'Ocultar' : 'Mostrar';
+    });
+
+    let currentUser = null;
+    let seccionesLayer = null;
+    let allowedSecciones = null; // null => todas
+    let seccionesData = null;
+    // Polígono de seguridad: se validará contra las secciones cargadas; bbox es respaldo.
+    const EDIT_FALLBACK_BBOX = [
+      [-100.42, 25.64],
+      [-100.42, 25.71],
+      [-100.34, 25.71],
+      [-100.34, 25.64]
+    ];
+    let geofencePolygons = null;
+    let geofenceAllowed = false;
+    let lastGeolocation = null;
+    let userLocMarker = null;
+    let userLocCircle = null;
+    let geoWatchId = null;
+    const NEARBY_RADIUS_METERS = 50; // radio máximo para permitir clic sobre un predio
+
+    function loadStatus() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function saveStatus(state) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    const statusById = loadStatus();
+
+    function isAdmin() {
+      return currentUser && currentUser.role === 'admin';
+    }
+
+    function cycleStatus(current) {
+      if (current === 'rojo') return 'azul';
+      if (current === 'azul') return 'neutral';
+      return 'rojo';
+    }
+
+    function updateGeoStatus(text, color = '#b45309') {
+      if (!geoStatus) return;
+      geoStatus.textContent = text;
+      geoStatus.style.color = color;
+    }
+
+    function updateUserLocation(latlng, accuracy) {
+      if (userLocMarker) map.removeLayer(userLocMarker);
+      if (userLocCircle) map.removeLayer(userLocCircle);
+      userLocMarker = L.marker(latlng, { title: 'Tu ubicación' }).addTo(map);
+      const radius = Math.max(accuracy || 20, NEARBY_RADIUS_METERS);
+      userLocCircle = L.circle(latlng, { radius, color: '#2563eb', weight: 2, fillOpacity: 0.1 }).addTo(map);
+    }
+
+    function checkPointInPolygonLatLng(latlng, polygon) {
+      const pt = [latlng.lng, latlng.lat];
+      return pointInPolygon(pt, polygon);
+    }
+
+    function isLatLngAllowed(latlng) {
+      let inside = null;
+      const seccionCheck = isInsideSeccionGeofence(latlng);
+      if (seccionCheck !== null) {
+        inside = seccionCheck;
+      } else if (geofencePolygons) {
+        inside = geofencePolygons.some(poly => checkPointInPolygonLatLng(latlng, poly));
+      } else {
+        inside = checkPointInPolygonLatLng(latlng, EDIT_FALLBACK_BBOX);
+      }
+      return inside;
+    }
+
+    function isInsideSeccionGeofence(latlng) {
+      if (!seccionesData) return null;
+      const pt = [latlng.lng, latlng.lat];
+      for (const f of seccionesData.features) {
+        const secc = f.properties?.SECCION;
+        if (allowedSecciones && allowedSecciones.size && !allowedSecciones.has(String(secc))) continue;
+        const geom = f.geometry;
+        if (geom.type === 'Polygon') {
+          for (const ring of geom.coordinates) {
+            if (pointInPolygon(pt, ring)) return true;
+          }
+        } else if (geom.type === 'MultiPolygon') {
+          for (const poly of geom.coordinates) {
+            for (const ring of poly) {
+              if (pointInPolygon(pt, ring)) return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    function ensureGeofence() {
+      if (geofenceAllowed) return true;
+      updateGeoStatus('Fuera del área permitida o sin geolocalización: edición bloqueada', '#b91c1c');
+      return false;
+    }
+
+    function isNearUser(layer) {
+      if (!lastGeolocation) return false;
+      const userLL = L.latLng(lastGeolocation.latitude, lastGeolocation.longitude);
+      const center = layer.getBounds().getCenter();
+      const dist = map.distance(userLL, center);
+      return dist <= NEARBY_RADIUS_METERS;
+    }
+
+    function verifyGeofence() {
+      if (!navigator.geolocation) {
+        geofenceAllowed = false;
+        updateGeoStatus('Este navegador no tiene geolocalización: edición bloqueada', '#b91c1c');
+        return;
+      }
+      if (geoWatchId) {
+        navigator.geolocation.clearWatch(geoWatchId);
+        geoWatchId = null;
+      }
+      const onSuccess = pos => {
+        lastGeolocation = pos.coords;
+        const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        updateUserLocation(latlng, pos.coords.accuracy);
+        const inside = isLatLngAllowed(latlng);
+        geofenceAllowed = !!inside;
+        if (inside) {
+          const acc = Math.round(pos.coords.accuracy || 0);
+          updateGeoStatus(`Candado geográfico OK: dentro del área · ${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)} · ±${acc}m`, '#065f46');
+        } else {
+          updateGeoStatus('Estás fuera del área permitida: edición bloqueada', '#b91c1c');
+        }
+      };
+      const onError = err => {
+        console.warn('Geolocalización falló', err);
+        geofenceAllowed = false;
+        updateGeoStatus('No se pudo obtener ubicación: edición bloqueada', '#b91c1c');
+      };
+      geoWatchId = navigator.geolocation.watchPosition(onSuccess, onError, { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 });
+    }
+
+    function getHouseNumber(feature) {
+      const props = feature.properties || {};
+      const candidates = [
+        'numero_ext', 'num_ext', 'numeroExterior', 'numero_exterior',
+        'NO_EXT', 'NUM_EXT', 'NUMERO', 'NUMERO_EXT', 'no_ext'
+      ];
+      for (const key of candidates) {
+        const val = props[key];
+        if (val !== undefined && val !== null && String(val).trim() !== '') {
+          return String(val).trim();
+        }
+      }
+      return null;
+    }
+
+    function styleFeature(feature) {
+      const id = feature.properties?.clave_lote || feature.properties?.id || feature.id;
+      const status = statusById[id] || 'neutral';
+      return {
+        color: '#ffffff',
+        weight: 0.4,
+        fillColor: STATUS_COLORS[status] || STATUS_COLORS.neutral,
+        fillOpacity: 0.65
+      };
+    }
+
+    function updateStats(layer) {
+      const statEl = document.getElementById('stat');
+      const counts = { rojo: 0, azul: 0 };
+      layer.eachLayer(l => {
+        const id = l.feature?.properties?.clave_lote || l.feature?.properties?.id || l.feature?.id;
+        const status = statusById[id] || 'neutral';
+        if (status === 'rojo') counts.rojo += 1;
+        if (status === 'azul') counts.azul += 1;
+      });
+      statEl.textContent = `Rojo: ${counts.rojo} · Azul: ${counts.azul}`;
+    }
+
+    const WFS_URL = 'https://geoserver.sanpedro.gob.mx/wfs';
+    const WFS_LAYER = 'vu:predio';
+    const MAX_FEATURES = 12000; // límite por vista para que cargue rápido en móvil
+    const SECCIONES_URL = 'data/secciones_spgg.geojson'; // secciones 356-417 recortadas
+
+    // Usuarios: admin y uno por sección (356-417). Usuario secXXX / clave secXXX.
+    const USERS = (() => {
+      const base = {
+        admin: { password: 'admin', secciones: [], role: 'admin' },
+      };
+      for (let s = 356; s <= 417; s++) {
+        const u = `sec${s}`;
+        base[u] = { password: `sec${s}`, secciones: [String(s)], role: 'user' };
+      }
+      return base;
+    })();
+
+    const loadingEl = document.createElement('div');
+    loadingEl.style.position = 'absolute';
+    loadingEl.style.top = '12px';
+    loadingEl.style.right = '12px';
+    loadingEl.style.background = 'rgba(255,255,255,0.9)';
+    loadingEl.style.padding = '6px 10px';
+    loadingEl.style.borderRadius = '8px';
+    loadingEl.style.fontSize = '12px';
+    loadingEl.style.boxShadow = '0 1px 6px rgba(0,0,0,0.1)';
+    loadingEl.textContent = 'Cargando predios...';
+    loadingEl.style.display = 'none';
+    document.body.appendChild(loadingEl);
+
+    let geoLayer = null;
+    let fetchController = null;
+
+    function setLoading(isLoading) {
+      loadingEl.style.display = isLoading ? 'block' : 'none';
+    }
+
+    function makeUrlFromBounds(bounds) {
+      const bbox = [
+        bounds.getWest(),
+        bounds.getSouth(),
+        bounds.getEast(),
+        bounds.getNorth(),
+        'EPSG:4326'
+      ].join(',');
+      const params = new URLSearchParams({
+        service: 'WFS',
+        version: '2.0.0',
+        request: 'GetFeature',
+        typeNames: WFS_LAYER,
+        srsName: 'EPSG:4326',
+        outputFormat: 'application/json',
+        bbox,
+        count: String(MAX_FEATURES)
+      });
+      return `${WFS_URL}?${params.toString()}`;
+    }
+
+    function loadPrediosForView() {
+      const url = makeUrlFromBounds(map.getBounds());
+      if (fetchController) fetchController.abort();
+      fetchController = new AbortController();
+      setLoading(true);
+      fetch(url, { signal: fetchController.signal })
+        .then(r => r.json())
+        .then(data => {
+          if (geoLayer) {
+            geoLayer.remove();
+          }
+          geoLayer = L.geoJSON(data, {
+            style: styleFeature,
+            onEachFeature: (feature, l) => {
+              const id = feature.properties?.clave_lote || feature.properties?.id || feature.id;
+              // bloquea clic si no está en secciones autorizadas (cuando haya filtro)
+              const seccion = feature.properties?.seccion || feature.properties?.SECCION;
+              l.on('click', () => {
+                if (!ensureGeofence()) return;
+                if (!isNearUser(l)) {
+                  updateGeoStatus(`Muy lejos del predio: acércate ≤${NEARBY_RADIUS_METERS}m a tu ubicación`, '#b91c1c');
+                  return;
+                }
+                // valida por atributo, y si no hay atributo, valida geoespacialmente
+                if (allowedSecciones) {
+                  const attrAllowed = seccion && allowedSecciones.has(String(seccion));
+                  const inside = isInAllowedPolygon(l.getBounds().getCenter());
+                  if (!(attrAllowed || inside)) return;
+                }
+                const next = cycleStatus(statusById[id]);
+                statusById[id] = next;
+                l.setStyle(styleFeature(feature));
+                saveStatus(statusById);
+                updateStats(geoLayer);
+              });
+              const name = feature.properties?.ubicacion || '';
+              const manzana = feature.properties?.manzana || '';
+              const lote = feature.properties?.lote || '';
+              l.bindPopup(`<strong>${name || id || 'Predio'}</strong><br>Manzana: ${manzana} · Lote: ${lote}<br>ID: ${id || 's/d'}`);
+              const numero = getHouseNumber(feature);
+              if (numero) {
+                l.bindTooltip(numero, {
+                  permanent: true,
+                  direction: 'center',
+                  className: 'label-casa',
+                  opacity: 0
+                });
+              }
+            }
+          }).addTo(map);
+          updateStats(geoLayer);
+          updateNumberVisibility();
+        })
+        .catch(err => {
+          if (err.name === 'AbortError') return;
+          console.error('No se pudo cargar predios', err);
+          alert('No se pudo cargar predios. Reintenta o cambia de zoom.');
+        })
+        .finally(() => setLoading(false));
+    }
+
+    map.whenReady(() => loadPrediosForView());
+    map.on('moveend', () => loadPrediosForView());
+
+    // Capa de secciones electorales (recorte SPGG)
+    fetch(SECCIONES_URL)
+      .then(r => r.json())
+      .then(data => {
+        seccionesLayer = L.geoJSON(data, {
+          style: f => ({
+            color: '#059669',
+            weight: 1.2,
+            fillOpacity: allowedSecciones ? 0.04 : 0.08
+          }),
+          onEachFeature: (f, l) => {
+            const seccion = f.properties?.SECCION;
+            l.bindPopup(`Sección ${seccion || ''}`);
+          }
+        }).addTo(map);
+        seccionesData = data;
+        // geofencePolygons para respaldo (sin filtrar)
+        geofencePolygons = data.features
+          .map(f => f.geometry)
+          .filter(g => g && (g.type === 'Polygon' || g.type === 'MultiPolygon'))
+          .flatMap(g => {
+            if (g.type === 'Polygon') return g.coordinates;
+            if (g.type === 'MultiPolygon') return g.coordinates.flat();
+            return [];
+          });
+        verifyGeofence();
+      })
+      .catch(err => console.error('No se pudo cargar secciones', err));
+
+    function applySeccionFilter() {
+      if (!seccionesLayer) return;
+      seccionesLayer.eachLayer(l => {
+        const secc = l.feature?.properties?.SECCION;
+        const visible = !allowedSecciones || allowedSecciones.has(String(secc));
+        l.setStyle({
+          color: visible ? '#059669' : '#9ca3af',
+          weight: visible ? 1.5 : 0.5,
+          fillOpacity: visible ? 0.08 : 0
+        });
+        if (visible) {
+          l.addTo(map);
+        } else {
+          l.remove();
+          seccionesLayer.addTo(map); // keep layer on map for bounds
+        }
+      });
+      if (allowedSecciones && allowedSecciones.size > 0) {
+        const group = L.featureGroup();
+        seccionesLayer.eachLayer(l => {
+          const secc = l.feature?.properties?.SECCION;
+          if (allowedSecciones.has(String(secc))) group.addLayer(l);
+        });
+        if (group.getLayers().length) {
+          map.fitBounds(group.getBounds(), { maxZoom: 16 });
+        }
+      }
+    }
+
+    function pointInPolygon(point, polygon) {
+      // Ray-casting for [lng,lat] arrays
+      const x = point[0], y = point[1];
+      let inside = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i][0], yi = polygon[i][1];
+        const xj = polygon[j][0], yj = polygon[j][1];
+        const intersect = ((yi > y) !== (yj > y)) &&
+          (x < (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+
+    function isInAllowedPolygon(latlng) {
+      if (!allowedSecciones || !seccionesData) return true;
+      const pt = [latlng.lng, latlng.lat];
+      for (const f of seccionesData.features) {
+        const secc = f.properties?.SECCION;
+        if (!allowedSecciones.has(String(secc))) continue;
+        const geom = f.geometry;
+        if (geom.type === 'Polygon') {
+          for (const ring of geom.coordinates) {
+            if (pointInPolygon(pt, ring)) return true;
+          }
+        } else if (geom.type === 'MultiPolygon') {
+          for (const poly of geom.coordinates) {
+            for (const ring of poly) {
+              if (pointInPolygon(pt, ring)) return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    // ==== TopoExport overlays (opcional: curvas de nivel y hillshade) ====
+    // Coloca tus exports en data/topo/. Ajusta bounds al recorte real para el hillshade.
+    const TOPO = {
+      contoursUrl: 'data/topo/curvas.geojson',
+      hillshade: {
+        template: 'data/topo/hillshade/{z}/{x}/{y}.png',
+        minZoom: 12,
+        maxZoom: 17,
+        bounds: [
+          [25.57, -100.45], // SW
+          [25.72, -100.28]  // NE
+        ],
+        opacity: 0.55
+      }
+    };
+    let contoursLayer = null;
+    let hillshadeLayer = null;
+
+    function loadContours() {
+      if (!TOPO.contoursUrl) return;
+      fetch(TOPO.contoursUrl)
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+        .then(data => {
+          contoursLayer = L.geoJSON(data, {
+            style: () => ({
+              color: '#6b21a8',
+              weight: 1,
+              opacity: 0.7
+            })
+          }).addTo(map);
+          layerControl.addOverlay(contoursLayer, 'Curvas (TopoExport)');
+          console.log('Curvas de nivel cargadas');
+        })
+        .catch(err => console.warn('No se pudieron cargar las curvas TopoExport', err));
+    }
+
+    function loadHillshade() {
+      // Deshabilitado mientras no existan tiles locales para evitar 404.
+      console.warn('Hillshade deshabilitado (no hay tiles locales en data/topo/hillshade)');
+      return;
+    }
+
+    loadContours();
+    loadHillshade();
+    verifyGeofence();
+
+    function updateNumberVisibility() {
+      if (!geoLayer) return;
+      const allow = toggleNumbers.checked && map.getZoom() >= 16;
+      geoLayer.eachLayer(l => {
+        const tt = l.getTooltip && l.getTooltip();
+        if (tt) tt.setOpacity(allow ? 1 : 0);
+      });
+    }
+
+    map.on('zoomend', updateNumberVisibility);
+    toggleNumbers.addEventListener('change', updateNumberVisibility);
+
+    function handleLogin() {
+      const u = userInput.value.trim();
+      const p = passInput.value.trim();
+      const conf = USERS[u];
+      if (!conf || conf.password !== p) {
+        userStatus.textContent = 'Usuario o clave inválidos';
+        userStatus.style.color = '#b91c1c';
+        return;
+      }
+      currentUser = { name: u, role: conf.role || 'user' };
+      allowedSecciones = conf.secciones && conf.secciones.length ? new Set(conf.secciones.map(String)) : null;
+      userStatus.textContent = allowedSecciones ? `Usuario: ${u} · Secciones: ${[...allowedSecciones].join(',')}` : `Usuario: ${u} · Todas las secciones`;
+      userStatus.style.color = '#065f46';
+      applySeccionFilter();
+    }
+    loginBtn.addEventListener('click', handleLogin);
+
+  </script>
+</body>
+</html>
