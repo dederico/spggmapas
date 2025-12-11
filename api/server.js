@@ -115,14 +115,27 @@ app.post('/login', auth, async (req, res) => {
 // GET /stats -> totales por seccion
 app.get('/stats', auth, async (req, res) => {
   try {
+    // Usa la seccion de predios; si es null, toma la última seccion registrada en logs
     const { rows } = await pool.query(`
+      with base as (
+        select
+          p.id_predio,
+          p.status,
+          coalesce(
+            p.seccion,
+            (select seccion from predio_logs pl
+             where pl.id_predio = p.id_predio and pl.seccion is not null
+             order by pl.created_at desc limit 1)
+          ) as seccion
+        from predios p
+      )
       select
         coalesce(seccion, '(sin seccion)') as seccion,
         count(*) filter (where status = 'rojo') as rojo,
         count(*) filter (where status = 'azul') as azul,
         count(*) filter (where status = 'neutral') as neutral,
         count(*) as total
-      from predios
+      from base
       group by seccion
       order by seccion
     `);

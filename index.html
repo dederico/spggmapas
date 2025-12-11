@@ -142,7 +142,7 @@
     const API_BASE = window.API_BASE || '';
     const API_KEY = window.API_KEY || '';
 
-    const map = L.map('map');
+    const map = L.map('map', { tapTolerance: 20 });
     const base = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap'
     });
@@ -159,6 +159,7 @@
     const userStatus = document.getElementById('userStatus');
     const geoStatus = document.getElementById('geoStatus');
     const toggleNumbers = document.getElementById('toggleNumbers');
+    const canvasRenderer = L.canvas({ tolerance: 8 });
     let panelVisible = true;
     toggleBtn.addEventListener('click', () => {
       panelVisible = !panelVisible;
@@ -485,11 +486,18 @@
             geoLayer.remove();
           }
           geoLayer = L.geoJSON(data, {
+            renderer: canvasRenderer,
             style: styleFeature,
             onEachFeature: (feature, l) => {
               const id = feature.properties?.clave_lote || feature.properties?.id || feature.id;
               // bloquea clic si no está en secciones autorizadas (cuando haya filtro)
               const seccion = feature.properties?.seccion || feature.properties?.SECCION;
+              l.on('mouseover', () => {
+                l.setStyle({ weight: 1.2, color: '#111' });
+              });
+              l.on('mouseout', () => {
+                l.setStyle(styleFeature(feature));
+              });
               l.on('click', () => {
                 if (!ensureGeofence()) return;
                 if (!isNearUser(l)) {
@@ -504,7 +512,8 @@
                 }
                 const next = cycleStatus(statusById[id]);
                 statusById[id] = next;
-                l.setStyle(styleFeature(feature));
+                l.setStyle({ ...styleFeature(feature), weight: 1.4, color: '#0f172a' });
+                l.bringToFront();
                 saveStatus(statusById);
                 saveRemoteStatus(id, next, seccion || null);
                 updateStats(geoLayer);
