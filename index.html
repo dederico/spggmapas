@@ -159,7 +159,6 @@
     const userStatus = document.getElementById('userStatus');
     const geoStatus = document.getElementById('geoStatus');
     const toggleNumbers = document.getElementById('toggleNumbers');
-    const canvasRenderer = L.canvas({ tolerance: 8 });
     let panelVisible = true;
     toggleBtn.addEventListener('click', () => {
       panelVisible = !panelVisible;
@@ -395,7 +394,7 @@
       const status = statusById[id] || 'neutral';
       return {
         color: '#ffffff',
-        weight: 0.4,
+        weight: 1,
         fillColor: STATUS_COLORS[status] || STATUS_COLORS.neutral,
         fillOpacity: 0.65
       };
@@ -486,7 +485,6 @@
             geoLayer.remove();
           }
           geoLayer = L.geoJSON(data, {
-            renderer: canvasRenderer,
             style: styleFeature,
             onEachFeature: (feature, l) => {
               const id = feature.properties?.clave_lote || feature.properties?.id || feature.id;
