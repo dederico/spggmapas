@@ -149,6 +149,11 @@
     base.addTo(map);
     const layerControl = L.control.layers({ 'OSM': base }, {}, { collapsed: true }).addTo(map);
 
+    // Pane dedicado para la ubicación del usuario, sin capturar clics
+    const userPane = map.createPane('userloc');
+    userPane.style.zIndex = '350';
+    userPane.style.pointerEvents = 'none';
+
     map.setView(CENTER, 14.5);
 
     const toggleBtn = document.getElementById('togglePanel');
@@ -284,9 +289,22 @@
         iconSize: [26, 26],
         iconAnchor: [13, 13]
       });
-      userLocMarker = L.marker(latlng, { title: 'Tu ubicación', icon: userIcon }).addTo(map);
+      userLocMarker = L.marker(latlng, {
+        title: 'Tu ubicación',
+        icon: userIcon,
+        pane: 'userloc',
+        keyboard: false
+      }).addTo(map);
       const radius = Math.max(accuracy || 20, NEARBY_RADIUS_METERS);
-      userLocCircle = L.circle(latlng, { radius, color: '#2563eb', weight: 2, fillOpacity: 0.1 }).addTo(map);
+      userLocCircle = L.circle(latlng, {
+        radius,
+        color: '#2563eb',
+        weight: 2,
+        fillOpacity: 0.1,
+        pane: 'userloc',
+        interactive: false,
+        bubblingMouseEvents: false
+      }).addTo(map);
     }
 
     function checkPointInPolygonLatLng(latlng, polygon) {
