@@ -236,13 +236,26 @@
 
     async function saveRemoteStatus(id, status, seccion = null) {
       if (!API_BASE || !id) return;
+      const usuario = currentUser ? currentUser.name : null;
       try {
         await fetchJSON(`${API_BASE}/predios`, {
           method: 'POST',
-          body: JSON.stringify({ id_predio: id, status, seccion })
+          body: JSON.stringify({ id_predio: id, status, seccion, usuario })
         });
       } catch (err) {
         console.warn('No se pudo guardar remoto', err);
+      }
+    }
+
+    async function recordLogin(usuario, seccionesText) {
+      if (!API_BASE || !usuario) return;
+      try {
+        await fetchJSON(`${API_BASE}/login`, {
+          method: 'POST',
+          body: JSON.stringify({ usuario, secciones: seccionesText || '' })
+        });
+      } catch (err) {
+        console.warn('No se pudo registrar login', err);
       }
     }
 
@@ -694,6 +707,7 @@
       userStatus.textContent = allowedSecciones ? `Usuario: ${u} · Secciones: ${[...allowedSecciones].join(',')}` : `Usuario: ${u} · Todas las secciones`;
       userStatus.style.color = '#065f46';
       applySeccionFilter();
+      recordLogin(u, allowedSecciones ? [...allowedSecciones].join(',') : '');
       loadRemoteStatuses();
     }
     loginBtn.addEventListener('click', handleLogin);

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Predios</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 16px; background: #f8fafc; color: #0f172a; }
+    h1 { margin: 0 0 12px 0; }
+    .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    .card { background: #fff; border-radius: 12px; padding: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+    th { background: #f3f4f6; }
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 6px; font-size: 12px; }
+    .rojo { background: #fee2e2; color: #b91c1c; }
+    .azul { background: #dbeafe; color: #1d4ed8; }
+    .neutral { background: #e5e7eb; color: #374151; }
+    code { background: #e5e7eb; padding: 2px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Dashboard Predios</h1>
+  <div class="card" style="margin-bottom:12px;">
+    <div><strong>API:</strong> <code id="apiUrl"></code></div>
+    <div style="margin-top:6px;">Totales por sección, usuarios y actividad reciente.</div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h3>Totales por sección</h3>
+      <table id="statsTable">
+        <thead><tr><th>Sección</th><th>Rojo</th><th>Azul</th><th>Neutral</th><th>Total</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Usuarios</h3>
+      <table id="usersTable">
+        <thead><tr><th>Usuario</th><th>Último acceso</th><th>Secciones</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="card" style="grid-column: 1 / -1;">
+      <h3>Actividad reciente</h3>
+      <table id="activityTable">
+        <thead><tr><th>Predio</th><th>Status</th><th>Sección</th><th>Usuario</th><th>Fecha</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // Config: usa las mismas constantes que en index.html
+    const API_BASE = window.API_BASE || 'https://api-mapas-pqoi.onrender.com';
+    const API_KEY = window.API_KEY || 'mapas_spgg';
+
+    document.getElementById('apiUrl').textContent = API_BASE;
+
+    async function fetchJSON(path) {
+      const res = await fetch(`${API_BASE}${path}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`
+        }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return d.toLocaleString();
+    }
+
+    async function loadStats() {
+      const data = await fetchJSON('/stats');
+      const tbody = document.querySelector('#statsTable tbody');
+      tbody.innerHTML = '';
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.seccion}</td>
+          <td><span class="badge rojo">${row.rojo}</span></td>
+          <td><span class="badge azul">${row.azul}</span></td>
+          <td><span class="badge neutral">${row.neutral}</span></td>
+          <td>${row.total}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadUsers() {
+      const data = await fetchJSON('/users');
+      const tbody = document.querySelector('#usersTable tbody');
+      tbody.innerHTML = '';
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.usuario}</td>
+          <td>${fmtDate(row.last_seen)}</td>
+          <td>${row.secciones || ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadActivity() {
+      const data = await fetchJSON('/activity?limit=200');
+      const tbody = document.querySelector('#activityTable tbody');
+      tbody.innerHTML = '';
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.id_predio}</td>
+          <td>${row.status}</td>
+          <td>${row.seccion || ''}</td>
+          <td>${row.usuario || ''}</td>
+          <td>${fmtDate(row.created_at)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadAll() {
+      try {
+        await Promise.all([loadStats(), loadUsers(), loadActivity()]);
+      } catch (err) {
+        console.error('Error cargando dashboard', err);
+      }
+    }
+
+    loadAll();
+    setInterval(loadAll, 60000);
+  </script>
+</body>
+</html>
