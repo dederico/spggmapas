@@ -329,6 +329,40 @@
       return false;
     }
 
+    function inferSeccionByPoint(latlng) {
+      if (!seccionesData || !latlng) return null;
+      const pt = [latlng.lng, latlng.lat];
+      for (const f of seccionesData.features) {
+        const secc = f.properties?.SECCION;
+        const geom = f.geometry;
+        if (!geom) continue;
+        if (geom.type === 'Polygon') {
+          for (const ring of geom.coordinates) {
+            if (pointInPolygon(pt, ring)) return secc;
+          }
+        } else if (geom.type === 'MultiPolygon') {
+          for (const poly of geom.coordinates) {
+            for (const ring of poly) {
+              if (pointInPolygon(pt, ring)) return secc;
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    function getFeatureSeccion(feature, layer) {
+      const fromProps = feature.properties?.seccion || feature.properties?.SECCION;
+      if (fromProps) return String(fromProps);
+      // Si el usuario tiene una sola sección asignada, úsala como fallback
+      if (allowedSecciones && allowedSecciones.size === 1) {
+        return [...allowedSecciones][0];
+      }
+      const center = layer ? layer.getBounds().getCenter() : null;
+      const inferred = center ? inferSeccionByPoint(center) : null;
+      return inferred ? String(inferred) : null;
+    }
+
     function ensureGeofence() {
       if (geofenceAllowed) return true;
       updateGeoStatus('Fuera del área permitida o sin geolocalización: edición bloqueada', '#b91c1c');
@@ -489,7 +523,7 @@
             onEachFeature: (feature, l) => {
               const id = feature.properties?.clave_lote || feature.properties?.id || feature.id;
               // bloquea clic si no está en secciones autorizadas (cuando haya filtro)
-              const seccion = feature.properties?.seccion || feature.properties?.SECCION;
+              const seccion = getFeatureSeccion(feature, l);
               l.on('mouseover', () => {
                 l.setStyle({ weight: 1.2, color: '#111' });
               });
