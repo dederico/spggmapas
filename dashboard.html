@@ -17,6 +17,17 @@
     .azul { background: #dbeafe; color: #1d4ed8; }
     .neutral { background: #e5e7eb; color: #374151; }
     code { background: #e5e7eb; padding: 2px 4px; border-radius: 4px; }
+    .btn { padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-warning { background: #f59e0b; color: white; }
+    .btn-warning:hover { background: #d97706; }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:hover { background: #2563eb; }
+    .filters { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+    .filters label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600; }
+    .filters input, .filters select { padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
   </style>
 </head>
 <body>
@@ -25,6 +36,55 @@
     <div><strong>API:</strong> <code id="apiUrl"></code></div>
     <div style="margin-top:6px;">Totales por sección, usuarios y actividad reciente.</div>
   </div>
+
+  <!-- Botones de Administración -->
+  <div class="card" style="margin-bottom:12px;">
+    <h3 style="margin:0 0 12px 0;">Administración</h3>
+    <div class="btn-group">
+      <button class="btn btn-warning" onclick="resetDatabase('soft')">Resetear a Neutral (Suave)</button>
+      <button class="btn btn-danger" onclick="resetDatabase('hard')">Eliminar Todos (Peligroso)</button>
+    </div>
+    <div id="resetMessage" style="margin-top:8px; font-size:14px;"></div>
+  </div>
+
+  <!-- Filtros de Análisis -->
+  <div class="card" style="margin-bottom:12px;">
+    <h3 style="margin:0 0 12px 0;">Análisis de Datos</h3>
+    <div class="filters">
+      <label>
+        Mes
+        <input type="month" id="filterMonth" placeholder="2026-01">
+      </label>
+      <label>
+        Sección
+        <input type="text" id="filterSeccion" placeholder="356">
+      </label>
+      <label>
+        Color
+        <select id="filterStatus">
+          <option value="">Todos</option>
+          <option value="rojo">Rojo</option>
+          <option value="azul">Azul</option>
+          <option value="neutral">Neutral</option>
+        </select>
+      </label>
+      <label style="justify-content:flex-end;">
+        <span>&nbsp;</span>
+        <button class="btn btn-primary" onclick="loadAnalytics()">Analizar</button>
+      </label>
+    </div>
+  </div>
+
+  <!-- Resultados de Análisis -->
+  <div class="card" style="margin-bottom:12px; display:none;" id="analyticsCard">
+    <h3>Resultados del Análisis</h3>
+    <div id="analyticsSummary" style="margin:8px 0; font-size:14px;"></div>
+    <table id="analyticsTable">
+      <thead><tr><th>Mes</th><th>Sección</th><th>Status</th><th>Usuario</th><th>Total</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
   <div class="grid">
     <div class="card">
       <h3>Totales por sección</h3>
@@ -127,6 +187,120 @@
         await Promise.all([loadStats(), loadUsers(), loadActivity()]);
       } catch (err) {
         console.error('Error cargando dashboard', err);
+      }
+    }
+
+    // Resetear base de datos
+    async function resetDatabase(mode) {
+      const messages = {
+        soft: '¿Estás seguro? Esto reseteará todos los predios a NEUTRAL.',
+        hard: '⚠️ PELIGRO: Esto ELIMINARÁ PERMANENTEMENTE todos los predios. ¿Continuar?'
+      };
+
+      const confirmMsg = messages[mode] || messages.soft;
+      if (!confirm(confirmMsg)) return;
+
+      // Doble confirmación para modo hard
+      if (mode === 'hard') {
+        const confirmation = prompt('Escribe "ELIMINAR" para confirmar:');
+        if (confirmation !== 'ELIMINAR') {
+          alert('Operación cancelada.');
+          return;
+        }
+      }
+
+      const messageDiv = document.getElementById('resetMessage');
+      messageDiv.textContent = 'Procesando...';
+      messageDiv.style.color = '#2563eb';
+
+      try {
+        const res = await fetch(`${API_BASE}/admin/reset?mode=${mode}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          }
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        messageDiv.textContent = `✓ ${data.message}`;
+        messageDiv.style.color = '#16a34a';
+
+        // Recargar stats después de 1 segundo
+        setTimeout(() => {
+          loadAll();
+          messageDiv.textContent = '';
+        }, 2000);
+      } catch (err) {
+        console.error('Error al resetear', err);
+        messageDiv.textContent = `✗ Error: ${err.message}`;
+        messageDiv.style.color = '#dc2626';
+      }
+    }
+
+    // Cargar análisis con filtros
+    async function loadAnalytics() {
+      const month = document.getElementById('filterMonth').value;
+      const seccion = document.getElementById('filterSeccion').value.trim();
+      const status = document.getElementById('filterStatus').value;
+
+      const params = new URLSearchParams();
+      if (month) params.append('month', month);
+      if (seccion) params.append('seccion', seccion);
+      if (status) params.append('status', status);
+
+      try {
+        const data = await fetchJSON(`/analytics?${params.toString()}`);
+        const card = document.getElementById('analyticsCard');
+        const tbody = document.querySelector('#analyticsTable tbody');
+        const summary = document.getElementById('analyticsSummary');
+
+        tbody.innerHTML = '';
+
+        if (data.length === 0) {
+          summary.textContent = 'No se encontraron resultados para los filtros seleccionados.';
+          summary.style.color = '#6b7280';
+          card.style.display = 'block';
+          return;
+        }
+
+        // Calcular resumen
+        const totalRegistros = data.reduce((sum, row) => sum + parseInt(row.total || 0, 10), 0);
+        const rojos = data.filter(r => r.status === 'rojo').reduce((sum, r) => sum + parseInt(r.total || 0, 10), 0);
+        const azules = data.filter(r => r.status === 'azul').reduce((sum, r) => sum + parseInt(r.total || 0, 10), 0);
+        const neutrales = data.filter(r => r.status === 'neutral').reduce((sum, r) => sum + parseInt(r.total || 0, 10), 0);
+        const usuarios = [...new Set(data.map(r => r.usuario))].length;
+
+        summary.innerHTML = `
+          <strong>Resumen:</strong>
+          ${totalRegistros} cambios totales |
+          <span class="badge rojo">${rojos} rojos</span>
+          <span class="badge azul">${azules} azules</span>
+          <span class="badge neutral">${neutrales} neutrales</span> |
+          ${usuarios} usuarios activos
+        `;
+        summary.style.color = '#0f172a';
+
+        // Llenar tabla
+        data.forEach(row => {
+          const tr = document.createElement('tr');
+          const mesFormatted = row.mes ? new Date(row.mes).toLocaleDateString('es-MX', { year: 'numeric', month: 'long' }) : '';
+          tr.innerHTML = `
+            <td>${mesFormatted}</td>
+            <td>${row.seccion || ''}</td>
+            <td><span class="badge ${row.status}">${row.status}</span></td>
+            <td>${row.usuario || ''}</td>
+            <td>${row.total}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        card.style.display = 'block';
+      } catch (err) {
+        console.error('Error cargando analytics', err);
+        alert('Error al cargar análisis: ' + err.message);
       }
     }
 

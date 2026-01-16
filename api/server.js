@@ -24,6 +24,12 @@ app.use(express.json());
 
 async function initTables() {
   const ddl = [
+    `create table if not exists predios (
+      id_predio text primary key,
+      status text check (status in ('rojo','azul','neutral')) default 'neutral',
+      seccion text,
+      updated_at timestamptz default now()
+    );`,
     `create table if not exists predio_logs (
       id serial primary key,
       id_predio text not null,
@@ -37,7 +43,10 @@ async function initTables() {
       usuario text not null,
       secciones text,
       created_at timestamptz default now()
-    );`
+    );`,
+    `create index if not exists idx_logs_created on predio_logs(created_at);`,
+    `create index if not exists idx_logs_seccion on predio_logs(seccion);`,
+    `create index if not exists idx_logs_status on predio_logs(status);`
   ];
   for (const q of ddl) {
     await pool.query(q);
@@ -176,6 +185,121 @@ app.get('/activity', auth, async (req, res) => {
        limit $1`,
       [limit]
     );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// POST /admin/reset -> limpia la base de datos (resetea predios a neutral o elimina)
+// Opciones: ?mode=soft (resetea a neutral) o ?mode=hard (elimina registros)
+// ?seccion=356 (opcional: limpia solo esa sección)
+app.post('/admin/reset', auth, async (req, res) => {
+  const mode = req.query.mode || 'soft'; // soft = resetear a neutral, hard = eliminar
+  const seccion = req.query.seccion || null;
+
+  try {
+    if (mode === 'hard') {
+      // Eliminar predios completamente
+      if (seccion) {
+        await pool.query('delete from predios where seccion = $1', [seccion]);
+      } else {
+        await pool.query('delete from predios');
+      }
+      res.json({ ok: true, mode: 'hard', seccion, message: 'Predios eliminados' });
+    } else {
+      // Resetear a neutral (modo suave)
+      if (seccion) {
+        await pool.query(
+          `update predios set status = 'neutral', updated_at = now() where seccion = $1`,
+          [seccion]
+        );
+      } else {
+        await pool.query(`update predios set status = 'neutral', updated_at = now()`);
+      }
+      res.json({ ok: true, mode: 'soft', seccion, message: 'Predios reseteados a neutral' });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// GET /analytics?month=2026-01&seccion=356&status=rojo -> análisis filtrado
+app.get('/analytics', auth, async (req, res) => {
+  const { month, seccion, status } = req.query;
+
+  try {
+    let query = `
+      select
+        date_trunc('month', created_at) as mes,
+        seccion,
+        status,
+        usuario,
+        count(*) as total
+      from predio_logs
+      where 1=1
+    `;
+    const params = [];
+    let paramIndex = 1;
+
+    // Filtro por mes (formato: YYYY-MM o YYYY-MM-DD)
+    if (month) {
+      const [year, monthNum] = month.split('-');
+      if (year && monthNum) {
+        query += ` and extract(year from created_at) = $${paramIndex}`;
+        params.push(parseInt(year, 10));
+        paramIndex++;
+        query += ` and extract(month from created_at) = $${paramIndex}`;
+        params.push(parseInt(monthNum, 10));
+        paramIndex++;
+      }
+    }
+
+    // Filtro por sección
+    if (seccion) {
+      query += ` and seccion = $${paramIndex}`;
+      params.push(seccion);
+      paramIndex++;
+    }
+
+    // Filtro por status
+    if (status && ['rojo', 'azul', 'neutral'].includes(status)) {
+      query += ` and status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+
+    query += `
+      group by mes, seccion, status, usuario
+      order by mes desc, seccion, status
+    `;
+
+    const { rows } = await pool.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// GET /analytics/summary -> resumen general por mes y sección
+app.get('/analytics/summary', auth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      select
+        date_trunc('month', created_at) as mes,
+        seccion,
+        count(*) filter (where status = 'rojo') as total_rojos,
+        count(*) filter (where status = 'azul') as total_azules,
+        count(*) filter (where status = 'neutral') as total_neutrales,
+        count(distinct usuario) as usuarios_activos,
+        count(*) as cambios_totales
+      from predio_logs
+      group by mes, seccion
+      order by mes desc, seccion
+    `);
     res.json(rows);
   } catch (err) {
     console.error(err);
