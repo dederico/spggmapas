@@ -49,8 +49,21 @@
   <div class="card" style="margin-bottom:12px;">
     <h3 style="margin:0 0 12px 0;">Administración</h3>
     <div class="btn-group">
-      <button class="btn btn-warning" onclick="resetDatabase('soft')">Resetear a Neutral (Suave)</button>
-      <button class="btn btn-danger" onclick="resetDatabase('hard')">Eliminar Todos (Peligroso)</button>
+      <button class="btn btn-warning" onclick="resetDatabase('soft')" title="Resetea todos los predios a neutral sin borrarlos">
+        🔄 Resetear a Neutral (Suave)
+      </button>
+      <button class="btn btn-danger" onclick="resetDatabase('hard')" title="PELIGRO: Elimina todos los predios permanentemente">
+        🗑️ Eliminar Todos (Peligroso)
+      </button>
+      <button class="btn btn-primary" onclick="openEndpoint('/stats')" title="Ver estadísticas generales por sección">
+        📊 Ver Stats JSON
+      </button>
+      <button class="btn btn-primary" onclick="openEndpoint('/users')" title="Ver lista de usuarios y último acceso">
+        👥 Ver Usuarios JSON
+      </button>
+      <button class="btn btn-primary" onclick="openEndpoint('/activity?limit=200')" title="Ver actividad reciente">
+        📝 Ver Actividad JSON
+      </button>
     </div>
     <div id="resetMessage" style="margin-top:8px; font-size:14px;"></div>
   </div>
@@ -95,6 +108,37 @@
 
   <!-- Análisis de Actividad -->
   <h2 style="margin: 24px 0 12px 0;">Análisis de Seccionales</h2>
+
+  <!-- Botones de Acceso Rápido -->
+  <div class="card" style="margin-bottom:12px;">
+    <h3 style="margin:0 0 12px 0;">Acceso Rápido a Análisis</h3>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="loadMostActive()" title="Actualizar gráfico de seccionales más activos">
+        🔄 Actualizar Más Activos
+      </button>
+      <button class="btn btn-primary" onclick="openEndpoint('/analytics/most-active')" title="Ver datos JSON en nueva pestaña">
+        📊 Ver JSON Más Activos
+      </button>
+      <button class="btn btn-primary" onclick="loadInactive()" title="Actualizar lista de seccionales inactivos">
+        🔄 Actualizar Inactivos
+      </button>
+      <button class="btn btn-primary" onclick="openEndpoint('/analytics/inactive')" title="Ver datos JSON en nueva pestaña">
+        📊 Ver JSON Inactivos
+      </button>
+      <button class="btn btn-primary" onclick="loadColorBalance()" title="Actualizar balance de rojos vs azules">
+        🔄 Actualizar Balance Colores
+      </button>
+      <button class="btn btn-primary" onclick="openEndpoint('/analytics/color-balance')" title="Ver datos JSON en nueva pestaña">
+        📊 Ver JSON Balance
+      </button>
+      <button class="btn btn-primary" onclick="openEndpoint('/analytics/summary')" title="Ver resumen general">
+        📈 Ver Resumen General
+      </button>
+      <button class="btn btn-primary" onclick="loadSeccionalAnalytics()" title="Actualizar todos los gráficos">
+        🔄 Actualizar Todo
+      </button>
+    </div>
+  </div>
 
   <div class="grid">
     <!-- Seccionales Más Activos -->
@@ -188,6 +232,11 @@
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
+    }
+
+    function openEndpoint(path) {
+      const url = `${API_BASE}${path}`;
+      window.open(url, '_blank');
     }
 
     function fmtDate(iso) {
