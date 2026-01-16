@@ -307,6 +307,87 @@ app.get('/analytics/summary', auth, async (req, res) => {
   }
 });
 
+// GET /analytics/most-active -> seccionales más activos (más logins)
+app.get('/analytics/most-active', auth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      select
+        usuario,
+        secciones,
+        count(*) as total_logins,
+        max(created_at) as ultimo_acceso,
+        min(created_at) as primer_acceso
+      from user_sessions
+      where usuario != 'admin'
+      group by usuario, secciones
+      order by total_logins desc
+      limit 20
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// GET /analytics/inactive -> seccionales que no han entrado
+app.get('/analytics/inactive', auth, async (req, res) => {
+  try {
+    // Generar lista de secciones 356-417
+    const allSecciones = [];
+    for (let i = 356; i <= 417; i++) {
+      allSecciones.push(`sec${i}`);
+    }
+
+    // Obtener usuarios que han entrado
+    const { rows: activeUsers } = await pool.query(`
+      select distinct usuario from user_sessions where usuario != 'admin'
+    `);
+    const activeSet = new Set(activeUsers.map(r => r.usuario));
+
+    // Encontrar inactivos
+    const inactive = allSecciones.filter(sec => !activeSet.has(sec));
+
+    res.json({
+      total_secciones: allSecciones.length,
+      activas: activeSet.size,
+      inactivas: inactive.length,
+      lista_inactivas: inactive
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// GET /analytics/color-balance -> balance de rojos vs azules por seccional
+app.get('/analytics/color-balance', auth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      select
+        usuario,
+        count(*) filter (where status = 'rojo') as total_rojos,
+        count(*) filter (where status = 'azul') as total_azules,
+        count(*) filter (where status = 'neutral') as total_neutrales,
+        count(*) as total_cambios,
+        case
+          when count(*) filter (where status = 'rojo') > count(*) filter (where status = 'azul') then 'mas_rojos'
+          when count(*) filter (where status = 'azul') > count(*) filter (where status = 'rojo') then 'mas_azules'
+          else 'empate'
+        end as balance
+      from predio_logs
+      where usuario is not null and usuario != 'admin'
+      group by usuario
+      having count(*) > 0
+      order by total_cambios desc
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
 initTables()
   .then(() => {
     app.listen(PORT, () => console.log(`API escuchando en puerto ${PORT}`));

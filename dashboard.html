@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard Predios</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 16px; background: #f8fafc; color: #0f172a; }
     h1 { margin: 0 0 12px 0; }
@@ -28,6 +29,13 @@
     .filters label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600; }
     .filters input, .filters select { padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
     .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chart-container { position: relative; height: 300px; margin: 12px 0; }
+    .stats-box { display: flex; justify-content: space-around; margin: 12px 0; text-align: center; }
+    .stats-box .stat { flex: 1; }
+    .stats-box .stat .number { font-size: 32px; font-weight: bold; margin: 4px 0; }
+    .stats-box .stat .label { font-size: 12px; color: #6b7280; }
+    .inactive-list { max-height: 200px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 4px; }
+    .inactive-list .chip { background: #fef3c7; color: #92400e; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -84,6 +92,61 @@
       <tbody></tbody>
     </table>
   </div>
+
+  <!-- Análisis de Actividad -->
+  <h2 style="margin: 24px 0 12px 0;">Análisis de Seccionales</h2>
+
+  <div class="grid">
+    <!-- Seccionales Más Activos -->
+    <div class="card">
+      <h3>Seccionales Más Activos</h3>
+      <div class="chart-container">
+        <canvas id="chartMostActive"></canvas>
+      </div>
+    </div>
+
+    <!-- Seccionales Inactivos -->
+    <div class="card">
+      <h3>Seccionales Inactivos</h3>
+      <div class="stats-box">
+        <div class="stat">
+          <div class="number" style="color:#16a34a;" id="statActivas">-</div>
+          <div class="label">Activas</div>
+        </div>
+        <div class="stat">
+          <div class="number" style="color:#dc2626;" id="statInactivas">-</div>
+          <div class="label">Inactivas</div>
+        </div>
+      </div>
+      <div id="inactiveList" class="inactive-list"></div>
+    </div>
+  </div>
+
+  <!-- Balance de Colores -->
+  <div class="card" style="margin:12px 0;">
+    <h3>Balance Rojos vs Azules por Seccional</h3>
+    <div class="chart-container" style="height:400px;">
+      <canvas id="chartColorBalance"></canvas>
+    </div>
+  </div>
+
+  <!-- Comparativa -->
+  <div class="grid">
+    <div class="card">
+      <h3>Seccionales con Más Rojos</h3>
+      <div class="chart-container">
+        <canvas id="chartMasRojos"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Seccionales con Más Azules</h3>
+      <div class="chart-container">
+        <canvas id="chartMasAzules"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <h2 style="margin: 24px 0 12px 0;">Datos Generales</h2>
 
   <div class="grid">
     <div class="card">
@@ -304,8 +367,195 @@
       }
     }
 
+    // Variables globales para los gráficos
+    let chartMostActive = null;
+    let chartColorBalance = null;
+    let chartMasRojos = null;
+    let chartMasAzules = null;
+
+    // Cargar seccionales más activos
+    async function loadMostActive() {
+      try {
+        const data = await fetchJSON('/analytics/most-active');
+        const top10 = data.slice(0, 10);
+
+        const ctx = document.getElementById('chartMostActive');
+        if (chartMostActive) chartMostActive.destroy();
+
+        chartMostActive = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: top10.map(d => d.usuario),
+            datasets: [{
+              label: 'Total Logins',
+              data: top10.map(d => d.total_logins),
+              backgroundColor: '#3b82f6'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              y: { beginAtZero: true }
+            }
+          }
+        });
+      } catch (err) {
+        console.error('Error cargando most active', err);
+      }
+    }
+
+    // Cargar seccionales inactivos
+    async function loadInactive() {
+      try {
+        const data = await fetchJSON('/analytics/inactive');
+        document.getElementById('statActivas').textContent = data.activas;
+        document.getElementById('statInactivas').textContent = data.inactivas;
+
+        const list = document.getElementById('inactiveList');
+        list.innerHTML = '';
+
+        if (data.lista_inactivas.length === 0) {
+          list.innerHTML = '<div style="color:#16a34a; font-weight:600;">¡Todas las secciones están activas!</div>';
+        } else {
+          data.lista_inactivas.forEach(sec => {
+            const chip = document.createElement('div');
+            chip.className = 'chip';
+            chip.textContent = sec;
+            list.appendChild(chip);
+          });
+        }
+      } catch (err) {
+        console.error('Error cargando inactive', err);
+      }
+    }
+
+    // Cargar balance de colores
+    async function loadColorBalance() {
+      try {
+        const data = await fetchJSON('/analytics/color-balance');
+        const top15 = data.slice(0, 15);
+
+        // Gráfico principal de balance
+        const ctx = document.getElementById('chartColorBalance');
+        if (chartColorBalance) chartColorBalance.destroy();
+
+        chartColorBalance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: top15.map(d => d.usuario),
+            datasets: [
+              {
+                label: 'Rojos',
+                data: top15.map(d => d.total_rojos),
+                backgroundColor: '#ef4444'
+              },
+              {
+                label: 'Azules',
+                data: top15.map(d => d.total_azules),
+                backgroundColor: '#3b82f6'
+              },
+              {
+                label: 'Neutrales',
+                data: top15.map(d => d.total_neutrales),
+                backgroundColor: '#9ca3af'
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'top' }
+            },
+            scales: {
+              x: { stacked: false },
+              y: { stacked: false, beginAtZero: true }
+            }
+          }
+        });
+
+        // Gráficos de más rojos y más azules
+        const masRojos = data.filter(d => d.balance === 'mas_rojos').slice(0, 8);
+        const masAzules = data.filter(d => d.balance === 'mas_azules').slice(0, 8);
+
+        // Gráfico más rojos
+        const ctxRojos = document.getElementById('chartMasRojos');
+        if (chartMasRojos) chartMasRojos.destroy();
+
+        chartMasRojos = new Chart(ctxRojos, {
+          type: 'doughnut',
+          data: {
+            labels: masRojos.map(d => d.usuario),
+            datasets: [{
+              data: masRojos.map(d => d.total_rojos),
+              backgroundColor: [
+                '#ef4444', '#dc2626', '#b91c1c', '#991b1b',
+                '#f87171', '#fca5a5', '#fecaca', '#fee2e2'
+              ]
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'right' }
+            }
+          }
+        });
+
+        // Gráfico más azules
+        const ctxAzules = document.getElementById('chartMasAzules');
+        if (chartMasAzules) chartMasAzules.destroy();
+
+        chartMasAzules = new Chart(ctxAzules, {
+          type: 'doughnut',
+          data: {
+            labels: masAzules.map(d => d.usuario),
+            datasets: [{
+              data: masAzules.map(d => d.total_azules),
+              backgroundColor: [
+                '#3b82f6', '#2563eb', '#1d4ed8', '#1e40af',
+                '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe'
+              ]
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'right' }
+            }
+          }
+        });
+      } catch (err) {
+        console.error('Error cargando color balance', err);
+      }
+    }
+
+    // Cargar todos los análisis de seccionales
+    async function loadSeccionalAnalytics() {
+      try {
+        await Promise.all([
+          loadMostActive(),
+          loadInactive(),
+          loadColorBalance()
+        ]);
+      } catch (err) {
+        console.error('Error cargando analytics de seccionales', err);
+      }
+    }
+
+    // Cargar todo
     loadAll();
-    setInterval(loadAll, 60000);
+    loadSeccionalAnalytics();
+    setInterval(() => {
+      loadAll();
+      loadSeccionalAnalytics();
+    }, 60000);
   </script>
 </body>
 </html>
