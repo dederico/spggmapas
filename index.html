@@ -222,15 +222,27 @@
         const seccionesParam = allowedSecciones && allowedSecciones.size ? `?secciones=${[...allowedSecciones].join(',')}` : '';
         const data = await fetchJSON(`${API_BASE}/predios${seccionesParam}`, { method: 'GET' });
         if (Array.isArray(data)) {
+          let hasChanges = false;
           for (const row of data) {
             if (!row.id_predio) continue;
             const st = row.status;
             if (st === 'rojo' || st === 'azul' || st === 'neutral') {
+              if (statusById[row.id_predio] !== st) {
+                hasChanges = true;
+              }
               statusById[row.id_predio] = st;
             }
           }
           saveStatus(statusById); // cache local para offline
-          if (geoLayer) updateStats(geoLayer);
+          // Si hay cambios y existe la capa, redibujar todos los predios
+          if (hasChanges && geoLayer) {
+            geoLayer.eachLayer(l => {
+              if (l.feature) {
+                l.setStyle(styleFeature(l.feature));
+              }
+            });
+            updateStats(geoLayer);
+          }
         }
       } catch (err) {
         console.warn('No se pudo sincronizar estados remotos', err);
@@ -585,6 +597,8 @@
           }).addTo(map);
           updateStats(geoLayer);
           updateNumberVisibility();
+          // Sincronizar estados remotos después de cargar predios
+          loadRemoteStatuses();
         })
         .catch(err => {
           if (err.name === 'AbortError') return;
