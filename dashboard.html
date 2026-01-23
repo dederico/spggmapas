@@ -45,9 +45,19 @@
     <div style="margin-top:6px;">Totales por sección, usuarios y actividad reciente.</div>
   </div>
 
-  <!-- Botones de Administración -->
-  <div class="card" style="margin-bottom:12px;">
-    <h3 style="margin:0 0 12px 0;">Administración</h3>
+  <!-- Login de Admin -->
+  <div class="card" style="margin-bottom:12px;" id="adminLogin">
+    <h3 style="margin:0 0 12px 0;">🔐 Acceso Administrativo</h3>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input type="password" id="adminPassword" placeholder="Contraseña de admin" style="padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;flex:1;max-width:300px;">
+      <button class="btn btn-primary" onclick="loginAdmin()">Entrar como Admin</button>
+    </div>
+    <div id="adminStatus" style="margin-top:8px;font-size:14px;"></div>
+  </div>
+
+  <!-- Botones de Administración (solo visible para admin) -->
+  <div class="card" style="margin-bottom:12px;display:none;" id="adminSection">
+    <h3 style="margin:0 0 12px 0;">🔧 Administración (Admin)</h3>
     <div class="btn-group">
       <button class="btn btn-warning" onclick="resetDatabase('soft')" title="Resetea todos los predios a neutral sin borrarlos">
         🔄 Resetear a Neutral (Suave)
@@ -66,6 +76,27 @@
       </button>
     </div>
     <div id="resetMessage" style="margin-top:8px; font-size:14px;"></div>
+  </div>
+
+  <!-- Restaurar Secciones (solo visible para admin) -->
+  <div class="card" style="margin-bottom:12px;display:none;" id="restoreSection">
+    <h3 style="margin:0 0 12px 0;">♻️ Restaurar Secciones desde Logs</h3>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+      <input type="text" id="restoreSeccion" placeholder="Ej: 362" style="padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;width:100px;">
+      <button class="btn btn-primary" onclick="restoreSeccion()">🔄 Restaurar Sección</button>
+      <span style="font-size:12px;color:#6b7280;">Restaura el último estado conocido desde predio_logs</span>
+    </div>
+    <div id="restoreMessage" style="font-size:14px;"></div>
+  </div>
+
+  <!-- Auditoría de Resets (solo visible para admin) -->
+  <div class="card" style="margin-bottom:12px;display:none;" id="auditSection">
+    <h3 style="margin:0 0 12px 0;">📋 Auditoría de Resets y Restauraciones</h3>
+    <button class="btn btn-primary" onclick="loadAudit()" style="margin-bottom:12px;">🔄 Actualizar Auditoría</button>
+    <table id="auditTable">
+      <thead><tr><th>Usuario</th><th>Acción</th><th>Sección</th><th>Predios Afectados</th><th>Fecha</th></tr></thead>
+      <tbody></tbody>
+    </table>
   </div>
 
   <!-- Filtros de Análisis -->
@@ -220,18 +251,121 @@
     // Config: usa las mismas constantes que en index.html
     const API_BASE = window.API_BASE || 'https://api-mapas-pqoi.onrender.com';
     const API_KEY = window.API_KEY || 'mapas_spgg';
+    const ADMIN_PASSWORD = 'admin'; // Contraseña de admin
+
+    let isAdmin = false;
 
     document.getElementById('apiUrl').textContent = API_BASE;
 
-    async function fetchJSON(path) {
+    async function fetchJSON(path, options = {}) {
       const res = await fetch(`${API_BASE}${path}`, {
+        ...options,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`
+          'Authorization': `Bearer ${API_KEY}`,
+          ...options.headers
         }
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
+    }
+
+    // Login de admin
+    function loginAdmin() {
+      const password = document.getElementById('adminPassword').value;
+      const statusDiv = document.getElementById('adminStatus');
+
+      if (password === ADMIN_PASSWORD) {
+        isAdmin = true;
+        statusDiv.textContent = '✅ Acceso admin concedido';
+        statusDiv.style.color = '#065f46';
+
+        // Mostrar secciones de admin
+        document.getElementById('adminSection').style.display = 'block';
+        document.getElementById('restoreSection').style.display = 'block';
+        document.getElementById('auditSection').style.display = 'block';
+
+        // Ocultar login
+        document.getElementById('adminLogin').style.display = 'none';
+
+        // Cargar auditoría automáticamente
+        loadAudit();
+      } else {
+        statusDiv.textContent = '❌ Contraseña incorrecta';
+        statusDiv.style.color = '#b91c1c';
+      }
+    }
+
+    // Restaurar sección desde logs
+    async function restoreSeccion() {
+      if (!isAdmin) {
+        alert('Acceso denegado: Solo admin puede restaurar');
+        return;
+      }
+
+      const seccion = document.getElementById('restoreSeccion').value.trim();
+      if (!seccion) {
+        alert('Por favor ingresa una sección (Ej: 362)');
+        return;
+      }
+
+      const messageDiv = document.getElementById('restoreMessage');
+      messageDiv.textContent = `Restaurando sección ${seccion}...`;
+      messageDiv.style.color = '#2563eb';
+
+      try {
+        const data = await fetchJSON(`/admin/restore?seccion=${seccion}`, {
+          method: 'POST',
+          body: JSON.stringify({ usuario: 'admin' })
+        });
+
+        messageDiv.textContent = `✅ ${data.message} (${data.restored_count} predios)`;
+        messageDiv.style.color = '#065f46';
+
+        // Recargar stats y auditoría
+        loadStats();
+        loadAudit();
+      } catch (err) {
+        console.error('Error restaurando:', err);
+        messageDiv.textContent = `❌ Error: ${err.message}`;
+        messageDiv.style.color = '#b91c1c';
+      }
+    }
+
+    // Cargar auditoría de resets/restauraciones
+    async function loadAudit() {
+      if (!isAdmin) return;
+
+      try {
+        const data = await fetchJSON('/admin/reset-audit');
+        const tbody = document.querySelector('#auditTable tbody');
+        tbody.innerHTML = '';
+
+        if (data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#6b7280;">No hay registros de auditoría</td></tr>';
+          return;
+        }
+
+        data.forEach(row => {
+          const tr = document.createElement('tr');
+          const modeLabel = {
+            soft: '🔄 Reset Suave',
+            hard: '🗑️ Eliminación',
+            restore: '♻️ Restauración'
+          }[row.mode] || row.mode;
+
+          tr.innerHTML = `
+            <td>${row.usuario || 'unknown'}</td>
+            <td>${modeLabel}</td>
+            <td>${row.seccion || 'Todas'}</td>
+            <td>${row.affected_count || 0}</td>
+            <td>${fmtDate(row.created_at)}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error('Error cargando auditoría:', err);
+      }
     }
 
     function openEndpoint(path) {
@@ -304,6 +438,11 @@
 
     // Resetear base de datos
     async function resetDatabase(mode) {
+      if (!isAdmin) {
+        alert('Acceso denegado: Solo admin puede resetear la base de datos');
+        return;
+      }
+
       const messages = {
         soft: '¿Estás seguro? Esto reseteará todos los predios a NEUTRAL.',
         hard: '⚠️ PELIGRO: Esto ELIMINARÁ PERMANENTEMENTE todos los predios. ¿Continuar?'
@@ -326,23 +465,18 @@
       messageDiv.style.color = '#2563eb';
 
       try {
-        const res = await fetch(`${API_BASE}/admin/reset?mode=${mode}`, {
+        const data = await fetchJSON(`/admin/reset?mode=${mode}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${API_KEY}`
-          }
+          body: JSON.stringify({ usuario: 'admin' })
         });
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-
-        messageDiv.textContent = `✓ ${data.message}`;
+        messageDiv.textContent = `✅ ${data.message} (${data.affected_count || 0} predios)`;
         messageDiv.style.color = '#16a34a';
 
-        // Recargar stats después de 1 segundo
+        // Recargar stats y auditoría después de 1 segundo
         setTimeout(() => {
           loadAll();
+          loadAudit();
           messageDiv.textContent = '';
         }, 2000);
       } catch (err) {

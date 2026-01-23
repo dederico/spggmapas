@@ -95,6 +95,7 @@ app.post('/predios', auth, async (req, res) => {
   if (!id_predio) return res.status(400).json({ error: 'id_predio requerido' });
   if (!['rojo', 'azul', 'neutral'].includes(status)) return res.status(400).json({ error: 'status inválido' });
   try {
+    console.log(`[POST /predios] Usuario: ${usuario}, Predio: ${id_predio}, Status: ${status}, Seccion: ${seccion}`);
     await pool.query(
       `insert into predios (id_predio, status, seccion, updated_at)
        values ($1, $2, $3, now())
@@ -106,9 +107,10 @@ app.post('/predios', auth, async (req, res) => {
        values ($1, $2, $3, $4, now())`,
       [id_predio, status, seccion, usuario]
     );
+    console.log(`[POST /predios] ✓ Guardado exitoso: ${id_predio}`);
     res.json({ ok: true });
   } catch (err) {
-    console.error(err);
+    console.error('[POST /predios] ERROR:', err);
     res.status(500).json({ error: 'db_error' });
   }
 });
@@ -118,13 +120,15 @@ app.post('/login', auth, async (req, res) => {
   const { usuario, secciones = null } = req.body || {};
   if (!usuario) return res.status(400).json({ error: 'usuario requerido' });
   try {
+    console.log(`[POST /login] Usuario: ${usuario}, Secciones: ${secciones || 'todas'}`);
     await pool.query(
       `insert into user_sessions (usuario, secciones, created_at) values ($1, $2, now())`,
       [usuario, secciones]
     );
+    console.log(`[POST /login] ✓ Login registrado: ${usuario}`);
     res.json({ ok: true });
   } catch (err) {
-    console.error(err);
+    console.error('[POST /login] ERROR:', err);
     res.status(500).json({ error: 'db_error' });
   }
 });
@@ -209,6 +213,8 @@ app.post('/admin/reset', auth, async (req, res) => {
   const seccion = req.query.seccion || null;
   const usuario = req.body?.usuario || 'unknown';
 
+  console.log(`[POST /admin/reset] ⚠️  RESET INICIADO - Usuario: ${usuario}, Mode: ${mode}, Seccion: ${seccion || 'todas'}`);
+
   try {
     let affectedCount = 0;
 
@@ -221,6 +227,7 @@ app.post('/admin/reset', auth, async (req, res) => {
         const result = await pool.query('delete from predios returning id_predio');
         affectedCount = result.rowCount;
       }
+      console.log(`[POST /admin/reset] 🗑️  ELIMINACIÓN COMPLETADA - ${affectedCount} predios eliminados`);
     } else {
       // Resetear a neutral (modo suave)
       if (seccion) {
@@ -233,6 +240,7 @@ app.post('/admin/reset', auth, async (req, res) => {
         const result = await pool.query(`update predios set status = 'neutral', updated_at = now() returning id_predio`);
         affectedCount = result.rowCount;
       }
+      console.log(`[POST /admin/reset] 🔄 RESET COMPLETADO - ${affectedCount} predios reseteados a neutral`);
     }
 
     // Registrar auditoría
@@ -241,6 +249,7 @@ app.post('/admin/reset', auth, async (req, res) => {
        values ($1, $2, $3, $4, now())`,
       [usuario, mode, seccion, affectedCount]
     );
+    console.log(`[POST /admin/reset] ✓ Auditoría registrada`);
 
     res.json({
       ok: true,
@@ -250,7 +259,7 @@ app.post('/admin/reset', auth, async (req, res) => {
       message: mode === 'hard' ? 'Predios eliminados' : 'Predios reseteados a neutral'
     });
   } catch (err) {
-    console.error(err);
+    console.error('[POST /admin/reset] ❌ ERROR:', err);
     res.status(500).json({ error: 'db_error' });
   }
 });
@@ -428,6 +437,8 @@ app.post('/admin/restore', auth, async (req, res) => {
     return res.status(400).json({ error: 'seccion es requerida' });
   }
 
+  console.log(`[POST /admin/restore] ♻️  RESTAURACIÓN INICIADA - Usuario: ${usuario}, Seccion: ${seccion}`);
+
   try {
     // Buscar el último estado de cada predio en predio_logs para esta sección
     const { rows } = await pool.query(`
@@ -443,7 +454,10 @@ app.post('/admin/restore', auth, async (req, res) => {
       select * from latest_logs
     `, [seccion]);
 
+    console.log(`[POST /admin/restore] 📋 Encontrados ${rows.length} predios en logs para restaurar`);
+
     if (rows.length === 0) {
+      console.log(`[POST /admin/restore] ⚠️  No hay logs para restaurar en sección ${seccion}`);
       return res.json({ ok: true, restored_count: 0, message: 'No hay logs para restaurar' });
     }
 
@@ -460,12 +474,15 @@ app.post('/admin/restore', auth, async (req, res) => {
       restoredCount++;
     }
 
+    console.log(`[POST /admin/restore] ✓ RESTAURACIÓN COMPLETADA - ${restoredCount} predios restaurados`);
+
     // Registrar en auditoría
     await pool.query(
       `insert into reset_audit (usuario, mode, seccion, affected_count, created_at)
        values ($1, $2, $3, $4, now())`,
       [usuario, 'restore', seccion, restoredCount]
     );
+    console.log(`[POST /admin/restore] ✓ Auditoría registrada`);
 
     res.json({
       ok: true,
@@ -474,7 +491,7 @@ app.post('/admin/restore', auth, async (req, res) => {
       message: `${restoredCount} predios restaurados desde logs`
     });
   } catch (err) {
-    console.error(err);
+    console.error('[POST /admin/restore] ❌ ERROR:', err);
     res.status(500).json({ error: 'db_error' });
   }
 });
