@@ -44,6 +44,14 @@ async function initTables() {
       secciones text,
       created_at timestamptz default now()
     );`,
+    `create table if not exists reset_audit (
+      id serial primary key,
+      usuario text,
+      mode text,
+      seccion text,
+      affected_count int,
+      created_at timestamptz default now()
+    );`,
     `create index if not exists idx_logs_created on predio_logs(created_at);`,
     `create index if not exists idx_logs_seccion on predio_logs(seccion);`,
     `create index if not exists idx_logs_status on predio_logs(status);`
@@ -195,31 +203,52 @@ app.get('/activity', auth, async (req, res) => {
 // POST /admin/reset -> limpia la base de datos (resetea predios a neutral o elimina)
 // Opciones: ?mode=soft (resetea a neutral) o ?mode=hard (elimina registros)
 // ?seccion=356 (opcional: limpia solo esa sección)
+// Body: { usuario: 'nombre_usuario' } (opcional, para auditoría)
 app.post('/admin/reset', auth, async (req, res) => {
   const mode = req.query.mode || 'soft'; // soft = resetear a neutral, hard = eliminar
   const seccion = req.query.seccion || null;
+  const usuario = req.body?.usuario || 'unknown';
 
   try {
+    let affectedCount = 0;
+
     if (mode === 'hard') {
       // Eliminar predios completamente
       if (seccion) {
-        await pool.query('delete from predios where seccion = $1', [seccion]);
+        const result = await pool.query('delete from predios where seccion = $1 returning id_predio', [seccion]);
+        affectedCount = result.rowCount;
       } else {
-        await pool.query('delete from predios');
+        const result = await pool.query('delete from predios returning id_predio');
+        affectedCount = result.rowCount;
       }
-      res.json({ ok: true, mode: 'hard', seccion, message: 'Predios eliminados' });
     } else {
       // Resetear a neutral (modo suave)
       if (seccion) {
-        await pool.query(
-          `update predios set status = 'neutral', updated_at = now() where seccion = $1`,
+        const result = await pool.query(
+          `update predios set status = 'neutral', updated_at = now() where seccion = $1 returning id_predio`,
           [seccion]
         );
+        affectedCount = result.rowCount;
       } else {
-        await pool.query(`update predios set status = 'neutral', updated_at = now()`);
+        const result = await pool.query(`update predios set status = 'neutral', updated_at = now() returning id_predio`);
+        affectedCount = result.rowCount;
       }
-      res.json({ ok: true, mode: 'soft', seccion, message: 'Predios reseteados a neutral' });
     }
+
+    // Registrar auditoría
+    await pool.query(
+      `insert into reset_audit (usuario, mode, seccion, affected_count, created_at)
+       values ($1, $2, $3, $4, now())`,
+      [usuario, mode, seccion, affectedCount]
+    );
+
+    res.json({
+      ok: true,
+      mode,
+      seccion,
+      affected_count: affectedCount,
+      message: mode === 'hard' ? 'Predios eliminados' : 'Predios reseteados a neutral'
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'db_error' });
@@ -380,6 +409,83 @@ app.get('/analytics/color-balance', auth, async (req, res) => {
       group by usuario
       having count(*) > 0
       order by total_cambios desc
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// POST /admin/restore -> restaura estados desde predio_logs
+// ?seccion=362 (requerido: sección a restaurar)
+// Body: { usuario: 'nombre_usuario' } (opcional, para auditoría)
+app.post('/admin/restore', auth, async (req, res) => {
+  const seccion = req.query.seccion;
+  const usuario = req.body?.usuario || 'unknown';
+
+  if (!seccion) {
+    return res.status(400).json({ error: 'seccion es requerida' });
+  }
+
+  try {
+    // Buscar el último estado de cada predio en predio_logs para esta sección
+    const { rows } = await pool.query(`
+      with latest_logs as (
+        select distinct on (id_predio)
+          id_predio,
+          status,
+          seccion
+        from predio_logs
+        where seccion = $1
+        order by id_predio, created_at desc
+      )
+      select * from latest_logs
+    `, [seccion]);
+
+    if (rows.length === 0) {
+      return res.json({ ok: true, restored_count: 0, message: 'No hay logs para restaurar' });
+    }
+
+    // Actualizar o insertar cada predio con su último estado conocido
+    let restoredCount = 0;
+    for (const row of rows) {
+      await pool.query(
+        `insert into predios (id_predio, status, seccion, updated_at)
+         values ($1, $2, $3, now())
+         on conflict (id_predio) do update
+         set status = excluded.status, seccion = excluded.seccion, updated_at = now()`,
+        [row.id_predio, row.status, row.seccion]
+      );
+      restoredCount++;
+    }
+
+    // Registrar en auditoría
+    await pool.query(
+      `insert into reset_audit (usuario, mode, seccion, affected_count, created_at)
+       values ($1, $2, $3, $4, now())`,
+      [usuario, 'restore', seccion, restoredCount]
+    );
+
+    res.json({
+      ok: true,
+      seccion,
+      restored_count: restoredCount,
+      message: `${restoredCount} predios restaurados desde logs`
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// GET /admin/reset-audit -> ver historial de resets y restauraciones
+app.get('/admin/reset-audit', auth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      select * from reset_audit
+      order by created_at desc
+      limit 100
     `);
     res.json(rows);
   } catch (err) {
