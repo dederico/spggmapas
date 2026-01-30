@@ -86,10 +86,113 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       transform: translate(-13px, -13px);
     }
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      z-index: 10000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal-content {
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 90%;
+      width: 400px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    .modal-content h3 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      text-align: center;
+    }
+    .modal-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .modal-btn {
+      padding: 16px;
+      border: 2px solid #ccc;
+      border-radius: 10px;
+      background: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .modal-btn:hover {
+      transform: scale(1.02);
+    }
+    .modal-btn.azul-btn {
+      background: #dbeafe;
+      border-color: #1d4ed8;
+      color: #1d4ed8;
+    }
+    .modal-btn.azul-btn:hover {
+      background: #1d4ed8;
+      color: #fff;
+    }
+    .modal-btn.rojo-btn {
+      background: #fee2e2;
+      border-color: #b91c1c;
+      color: #b91c1c;
+    }
+    .modal-btn.rojo-btn:hover {
+      background: #b91c1c;
+      color: #fff;
+    }
+    .modal-btn.neutral-btn {
+      background: #f3f4f6;
+      border-color: #6b7280;
+      color: #374151;
+    }
+    .modal-btn.neutral-btn:hover {
+      background: #6b7280;
+      color: #fff;
+    }
+    .modal-cancel {
+      margin-top: 8px;
+      padding: 10px;
+      border: none;
+      background: transparent;
+      color: #6b7280;
+      font-size: 14px;
+      cursor: pointer;
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+
+  <!-- Modal para seleccionar estado del predio -->
+  <div class="modal-overlay" id="statusModal">
+    <div class="modal-content">
+      <h3>¿Qué pasó en este predio?</h3>
+      <div class="modal-buttons">
+        <button class="modal-btn azul-btn" data-status="azul">
+          1. Abrió y me escuchó
+        </button>
+        <button class="modal-btn rojo-btn" data-status="rojo">
+          2. Abrió y no me escuchó
+        </button>
+        <button class="modal-btn neutral-btn" data-status="neutral">
+          3. No abrió
+        </button>
+      </div>
+      <button class="modal-cancel" onclick="closeModal()">Cancelar</button>
+    </div>
+  </div>
+
   <div class="panel" id="panel">
     <h2 style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <span>Predios San Pedro</span>
@@ -106,11 +209,11 @@
         <div id="userStatus" style="font-size:12px;color:#065f46;margin-top:4px;"></div>
         <div id="geoStatus" style="font-size:12px;color:#b45309;margin-top:4px;">Candado geográfico: verificando...</div>
       </div>
-      <div class="legend-row"><span class="swatch" style="background:#9ca3af"></span>Sin marcar</div>
-      <div class="legend-row"><span class="swatch" style="background:#e63946"></span>Rojo (opción 1)</div>
-      <div class="legend-row"><span class="swatch" style="background:#1d4ed8"></span>Azul (opción 2)</div>
+      <div class="legend-row"><span class="swatch" style="background:#9ca3af"></span>Gris: No abrió</div>
+      <div class="legend-row"><span class="swatch" style="background:#1d4ed8"></span>Azul: Abrió y me escuchó</div>
+      <div class="legend-row"><span class="swatch" style="background:#e63946"></span>Rojo: Abrió y NO me escuchó</div>
       <div class="stat" id="stat"></div>
-      <div class="footer">Toca un predio para alternar rojo/azul. Se guarda en este navegador.</div>
+      <div class="footer">Toca un predio para seleccionar su estado. Se guarda automáticamente.</div>
       <div class="legend-row" style="margin-top:8px;">
         <input type="checkbox" id="toggleNumbers" checked style="margin:0;">
         <label for="toggleNumbers" style="font-size:12px; cursor:pointer;">Mostrar número al acercar (zoom &ge; 17)</label>
@@ -280,10 +383,38 @@
       return currentUser && currentUser.role === 'admin';
     }
 
-    function cycleStatus(current) {
-      if (current === 'rojo') return 'azul';
-      if (current === 'azul') return 'neutral';
-      return 'rojo';
+    // Variables para el modal
+    let currentPredioId = null;
+    let currentPredioFeature = null;
+    let currentPredioLayer = null;
+    let currentPredioSeccion = null;
+
+    function openModal(id, feature, layer, seccion) {
+      currentPredioId = id;
+      currentPredioFeature = feature;
+      currentPredioLayer = layer;
+      currentPredioSeccion = seccion;
+      document.getElementById('statusModal').classList.add('active');
+    }
+
+    function closeModal() {
+      currentPredioId = null;
+      currentPredioFeature = null;
+      currentPredioLayer = null;
+      currentPredioSeccion = null;
+      document.getElementById('statusModal').classList.remove('active');
+    }
+
+    function selectStatus(status) {
+      if (!currentPredioId || !currentPredioFeature || !currentPredioLayer) return;
+
+      statusById[currentPredioId] = status;
+      currentPredioLayer.setStyle({ ...styleFeature(currentPredioFeature), weight: 1.4, color: '#0f172a' });
+      currentPredioLayer.bringToFront();
+      saveStatus(statusById);
+      saveRemoteStatus(currentPredioId, status, currentPredioSeccion || null);
+      updateStats(geoLayer);
+      closeModal();
     }
 
     function updateGeoStatus(text, color = '#b45309') {
@@ -573,13 +704,8 @@
                   const inside = isInAllowedPolygon(l.getBounds().getCenter());
                   if (!(attrAllowed || inside)) return;
                 }
-                const next = cycleStatus(statusById[id]);
-                statusById[id] = next;
-                l.setStyle({ ...styleFeature(feature), weight: 1.4, color: '#0f172a' });
-                l.bringToFront();
-                saveStatus(statusById);
-                saveRemoteStatus(id, next, seccion || null);
-                updateStats(geoLayer);
+                // Abrir modal para seleccionar estado
+                openModal(id, feature, l, seccion);
               });
               const name = feature.properties?.ubicacion || '';
               const manzana = feature.properties?.manzana || '';
@@ -785,6 +911,21 @@
       loadRemoteStatuses();
     }
     loginBtn.addEventListener('click', handleLogin);
+
+    // Event listeners para los botones del modal
+    document.querySelectorAll('.modal-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const status = e.currentTarget.getAttribute('data-status');
+        selectStatus(status);
+      });
+    });
+
+    // Cerrar modal al hacer click fuera de él
+    document.getElementById('statusModal').addEventListener('click', (e) => {
+      if (e.target.id === 'statusModal') {
+        closeModal();
+      }
+    });
 
   </script>
 </body>
