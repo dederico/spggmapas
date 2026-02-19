@@ -1,0 +1,43 @@
+RESUMEN DE CONVERSACIONES - Proyecto Mapas
+==========================================
+
+[2026-02-19]
+- Usuario preguntó por el último commit del repositorio
+- Último commit: addb65c "feat: modal seleccion estado predios" (30 enero 2026)
+- Cambios: 156 líneas agregadas, 15 eliminadas en index.html
+- Se implementó un modal para seleccionar estado de predios con 3 opciones:
+  1. Abrió y me escuchó (azul)
+  2. Abrió y no me escuchó (rojo)
+  3. No abrió (neutral/gris)
+- Antes alternaba automáticamente entre estados, ahora abre modal con pregunta "¿Qué pasó en este predio?"
+- Revisión del sistema de base de datos:
+  * PostgreSQL con 4 tablas: predios, predio_logs, user_sessions, reset_audit
+  * Cada cambio de estado se guarda en predios (estado actual) y predio_logs (historial)
+  * Sistema incluye timestamps, usuario, y sección en cada registro
+
+IMPLEMENTACIÓN SISTEMA DE 3 VUELTAS:
+- Base de datos:
+  * Agregada columna vuelta_actual a tabla predios
+  * Nueva tabla visitas: registra cada vuelta con fecha, resultado, usuario
+  * Nueva tabla vuelta_2_demograficos: total_personas, menores, mayores
+  * Nueva tabla personas: nombres individuales con campo es_menor
+  * Nueva tabla vuelta_3_apoyo: tipos de apoyo (array de opciones)
+
+- API (server.js):
+  * Endpoint GET /predios/:id/progreso - obtiene progreso completo
+  * Endpoint POST /vuelta-1 - guarda contacto inicial (abrió/no abrió)
+  * Endpoint POST /vuelta-2 - guarda datos demográficos y nombres
+  * Endpoint POST /vuelta-3 - guarda tipos de apoyo seleccionados
+  * Tipos de apoyo válidos: LONA, BARDA, CASILLA, MANZANERO, PROMOTOR DE REDES
+
+- Frontend (index.html):
+  * Modal Vuelta 1: Estado del contacto (azul/rojo/neutral)
+  * Modal Vuelta 2: Formulario demográfico con campos de personas y opción de agregar nombres
+  * Modal Vuelta 3: Checkboxes para seleccionar múltiples tipos de apoyo
+  * Sistema detecta automáticamente en qué vuelta está cada predio
+  * Visualización mejorada:
+    - Vuelta 1: borde blanco
+    - Vuelta 2: borde verde grueso
+    - Vuelta 3: borde dorado más grueso
+  * Panel de estadísticas actualizado muestra progreso por vuelta
+  * Leyenda explica sistema de colores y bordes

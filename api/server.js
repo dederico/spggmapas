@@ -36,6 +36,7 @@ async function initTables() {
       id_predio text primary key,
       status text check (status in ('rojo','azul','neutral')) default 'neutral',
       seccion text,
+      vuelta_actual int default 0,
       updated_at timestamptz default now()
     );`,
     `create table if not exists predio_logs (
@@ -60,9 +61,50 @@ async function initTables() {
       affected_count int,
       created_at timestamptz default now()
     );`,
+    `create table if not exists visitas (
+      id serial primary key,
+      id_predio text not null,
+      vuelta int not null check (vuelta >= 1),
+      resultado text,
+      seccion text,
+      usuario text,
+      created_at timestamptz default now()
+    );`,
+    `create table if not exists vuelta_2_demograficos (
+      id serial primary key,
+      id_predio text not null,
+      total_personas int,
+      menores int,
+      mayores int,
+      seccion text,
+      usuario text,
+      created_at timestamptz default now()
+    );`,
+    `create table if not exists personas (
+      id serial primary key,
+      id_predio text not null,
+      nombre text not null,
+      es_menor boolean default false,
+      seccion text,
+      usuario text,
+      created_at timestamptz default now()
+    );`,
+    `create table if not exists vuelta_3_apoyo (
+      id serial primary key,
+      id_predio text not null,
+      tipos_apoyo text[] not null,
+      seccion text,
+      usuario text,
+      created_at timestamptz default now()
+    );`,
     `create index if not exists idx_logs_created on predio_logs(created_at);`,
     `create index if not exists idx_logs_seccion on predio_logs(seccion);`,
-    `create index if not exists idx_logs_status on predio_logs(status);`
+    `create index if not exists idx_logs_status on predio_logs(status);`,
+    `create index if not exists idx_visitas_predio on visitas(id_predio);`,
+    `create index if not exists idx_visitas_vuelta on visitas(vuelta);`,
+    `create index if not exists idx_demograficos_predio on vuelta_2_demograficos(id_predio);`,
+    `create index if not exists idx_personas_predio on personas(id_predio);`,
+    `create index if not exists idx_apoyo_predio on vuelta_3_apoyo(id_predio);`
   ];
   for (const q of ddl) {
     await pool.query(q);
@@ -87,8 +129,8 @@ app.get('/predios', auth, async (req, res) => {
     .filter(Boolean);
   try {
     const query = secciones.length
-      ? { text: 'select id_predio, status from predios where seccion = any($1)', values: [secciones] }
-      : { text: 'select id_predio, status from predios', values: [] };
+      ? { text: 'select id_predio, status, vuelta_actual from predios where seccion = any($1)', values: [secciones] }
+      : { text: 'select id_predio, status, vuelta_actual from predios', values: [] };
     const { rows } = await pool.query(query);
     res.json(rows);
   } catch (err) {
@@ -137,6 +179,190 @@ app.post('/login', auth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[POST /login] ERROR:', err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// GET /predios/:id/progreso -> obtener progreso completo de un predio
+app.get('/predios/:id/progreso', auth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Obtener vuelta actual
+    const { rows: predioRows } = await pool.query(
+      'select vuelta_actual, status from predios where id_predio = $1',
+      [id]
+    );
+    const vuelta_actual = predioRows.length > 0 ? predioRows[0].vuelta_actual : 0;
+    const status = predioRows.length > 0 ? predioRows[0].status : 'neutral';
+
+    // Obtener datos de vuelta 2 si existen
+    const { rows: vuelta2Rows } = await pool.query(
+      'select total_personas, menores, mayores from vuelta_2_demograficos where id_predio = $1 order by created_at desc limit 1',
+      [id]
+    );
+    const vuelta2 = vuelta2Rows.length > 0 ? vuelta2Rows[0] : null;
+
+    // Obtener nombres si existen
+    const { rows: personasRows } = await pool.query(
+      'select nombre, es_menor from personas where id_predio = $1',
+      [id]
+    );
+
+    // Obtener datos de vuelta 3 si existen
+    const { rows: vuelta3Rows } = await pool.query(
+      'select tipos_apoyo from vuelta_3_apoyo where id_predio = $1 order by created_at desc limit 1',
+      [id]
+    );
+    const vuelta3 = vuelta3Rows.length > 0 ? vuelta3Rows[0] : null;
+
+    res.json({
+      id_predio: id,
+      vuelta_actual,
+      status,
+      vuelta_2: vuelta2,
+      personas: personasRows,
+      vuelta_3: vuelta3
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// POST /vuelta-1 { id_predio, resultado, seccion?, usuario? }
+app.post('/vuelta-1', auth, async (req, res) => {
+  const { id_predio, resultado, seccion = null, usuario = null } = req.body || {};
+  if (!id_predio) return res.status(400).json({ error: 'id_predio requerido' });
+  if (!['azul', 'rojo', 'neutral'].includes(resultado)) {
+    return res.status(400).json({ error: 'resultado inválido' });
+  }
+
+  try {
+    console.log(`[POST /vuelta-1] Usuario: ${usuario}, Predio: ${id_predio}, Resultado: ${resultado}`);
+
+    // Actualizar predios con status y vuelta_actual = 1
+    await pool.query(
+      `insert into predios (id_predio, status, seccion, vuelta_actual, updated_at)
+       values ($1, $2, $3, 1, now())
+       on conflict (id_predio) do update
+       set status = excluded.status, seccion = excluded.seccion, vuelta_actual = 1, updated_at = now()`,
+      [id_predio, resultado, seccion]
+    );
+
+    // Registrar en visitas
+    await pool.query(
+      `insert into visitas (id_predio, vuelta, resultado, seccion, usuario, created_at)
+       values ($1, 1, $2, $3, $4, now())`,
+      [id_predio, resultado, seccion, usuario]
+    );
+
+    // Mantener compatibilidad con predio_logs
+    await pool.query(
+      `insert into predio_logs (id_predio, status, seccion, usuario, created_at)
+       values ($1, $2, $3, $4, now())`,
+      [id_predio, resultado, seccion, usuario]
+    );
+
+    console.log(`[POST /vuelta-1] ✓ Vuelta 1 guardada: ${id_predio}`);
+    res.json({ ok: true, vuelta_actual: 1 });
+  } catch (err) {
+    console.error('[POST /vuelta-1] ERROR:', err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// POST /vuelta-2 { id_predio, total_personas, menores, mayores, personas: [{nombre, es_menor}], seccion?, usuario? }
+app.post('/vuelta-2', auth, async (req, res) => {
+  const { id_predio, total_personas, menores, mayores, personas = [], seccion = null, usuario = null } = req.body || {};
+  if (!id_predio) return res.status(400).json({ error: 'id_predio requerido' });
+
+  try {
+    console.log(`[POST /vuelta-2] Usuario: ${usuario}, Predio: ${id_predio}, Personas: ${total_personas}`);
+
+    // Actualizar vuelta_actual = 2
+    await pool.query(
+      `insert into predios (id_predio, seccion, vuelta_actual, updated_at)
+       values ($1, $2, 2, now())
+       on conflict (id_predio) do update
+       set vuelta_actual = 2, updated_at = now()`,
+      [id_predio, seccion]
+    );
+
+    // Guardar datos demográficos
+    await pool.query(
+      `insert into vuelta_2_demograficos (id_predio, total_personas, menores, mayores, seccion, usuario, created_at)
+       values ($1, $2, $3, $4, $5, $6, now())`,
+      [id_predio, total_personas, menores, mayores, seccion, usuario]
+    );
+
+    // Guardar nombres de personas
+    for (const persona of personas) {
+      await pool.query(
+        `insert into personas (id_predio, nombre, es_menor, seccion, usuario, created_at)
+         values ($1, $2, $3, $4, $5, now())`,
+        [id_predio, persona.nombre, persona.es_menor || false, seccion, usuario]
+      );
+    }
+
+    // Registrar en visitas
+    await pool.query(
+      `insert into visitas (id_predio, vuelta, resultado, seccion, usuario, created_at)
+       values ($1, 2, 'completado', $2, $3, now())`,
+      [id_predio, seccion, usuario]
+    );
+
+    console.log(`[POST /vuelta-2] ✓ Vuelta 2 guardada: ${id_predio} - ${personas.length} personas`);
+    res.json({ ok: true, vuelta_actual: 2 });
+  } catch (err) {
+    console.error('[POST /vuelta-2] ERROR:', err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// POST /vuelta-3 { id_predio, tipos_apoyo: [], seccion?, usuario? }
+app.post('/vuelta-3', auth, async (req, res) => {
+  const { id_predio, tipos_apoyo = [], seccion = null, usuario = null } = req.body || {};
+  if (!id_predio) return res.status(400).json({ error: 'id_predio requerido' });
+  if (!Array.isArray(tipos_apoyo) || tipos_apoyo.length === 0) {
+    return res.status(400).json({ error: 'tipos_apoyo debe ser un array no vacío' });
+  }
+
+  const tiposValidos = ['LONA', 'BARDA', 'CASILLA', 'MANZANERO', 'PROMOTOR DE REDES'];
+  const todosValidos = tipos_apoyo.every(t => tiposValidos.includes(t));
+  if (!todosValidos) {
+    return res.status(400).json({ error: 'tipos_apoyo contiene valores inválidos' });
+  }
+
+  try {
+    console.log(`[POST /vuelta-3] Usuario: ${usuario}, Predio: ${id_predio}, Apoyos: ${tipos_apoyo.join(', ')}`);
+
+    // Actualizar vuelta_actual = 3
+    await pool.query(
+      `insert into predios (id_predio, seccion, vuelta_actual, updated_at)
+       values ($1, $2, 3, now())
+       on conflict (id_predio) do update
+       set vuelta_actual = 3, updated_at = now()`,
+      [id_predio, seccion]
+    );
+
+    // Guardar tipos de apoyo
+    await pool.query(
+      `insert into vuelta_3_apoyo (id_predio, tipos_apoyo, seccion, usuario, created_at)
+       values ($1, $2, $3, $4, now())`,
+      [id_predio, tipos_apoyo, seccion, usuario]
+    );
+
+    // Registrar en visitas
+    await pool.query(
+      `insert into visitas (id_predio, vuelta, resultado, seccion, usuario, created_at)
+       values ($1, 3, 'completado', $2, $3, now())`,
+      [id_predio, seccion, usuario]
+    );
+
+    console.log(`[POST /vuelta-3] ✓ Vuelta 3 guardada: ${id_predio}`);
+    res.json({ ok: true, vuelta_actual: 3 });
+  } catch (err) {
+    console.error('[POST /vuelta-3] ERROR:', err);
     res.status(500).json({ error: 'db_error' });
   }
 });

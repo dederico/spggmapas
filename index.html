@@ -169,27 +169,207 @@
       cursor: pointer;
       text-decoration: underline;
     }
+    .modal-form-group {
+      margin-bottom: 16px;
+    }
+    .modal-form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #374151;
+    }
+    .modal-input {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
+    .modal-input:focus {
+      outline: none;
+      border-color: #2563eb;
+    }
+    .persona-item {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      align-items: center;
+    }
+    .persona-item input[type="text"] {
+      flex: 1;
+      padding: 8px;
+      border: 2px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .persona-item button {
+      padding: 8px 12px;
+      background: #ef4444;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .add-persona-btn {
+      padding: 8px 16px;
+      background: #10b981;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+    .add-persona-btn:hover {
+      background: #059669;
+    }
+    .modal-submit-btn {
+      width: 100%;
+      padding: 14px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 16px;
+    }
+    .modal-submit-btn:hover {
+      background: #1d4ed8;
+    }
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border: 2px solid #d1d5db;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .checkbox-item:hover {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+    .checkbox-item input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+    .checkbox-item.checked {
+      border-color: #2563eb;
+      background: #dbeafe;
+    }
+    .badge {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background: #10b981;
+      color: white;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      border: 2px solid white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
 
-  <!-- Modal para seleccionar estado del predio -->
-  <div class="modal-overlay" id="statusModal">
+  <!-- Modal VUELTA 1 - Estado del predio -->
+  <div class="modal-overlay" id="vuelta1Modal">
     <div class="modal-content">
-      <h3>¿Qué pasó en este predio?</h3>
+      <h3>VUELTA 1: ¿Qué pasó en este predio?</h3>
       <div class="modal-buttons">
         <button class="modal-btn azul-btn" data-status="azul">
-          1. Abrió y me escuchó
+          ✅ Abrió y me escuchó
         </button>
         <button class="modal-btn rojo-btn" data-status="rojo">
-          2. Abrió y no me escuchó
+          ❌ Abrió y NO me escuchó
         </button>
         <button class="modal-btn neutral-btn" data-status="neutral">
-          3. No abrió
+          🚫 No abrió
         </button>
       </div>
-      <button class="modal-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="modal-cancel" onclick="closeAllModals()">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Modal VUELTA 2 - Datos demográficos -->
+  <div class="modal-overlay" id="vuelta2Modal">
+    <div class="modal-content">
+      <h3>VUELTA 2: Datos del Domicilio</h3>
+      <form id="vuelta2Form">
+        <div class="modal-form-group">
+          <label>¿Cuántas personas viven aquí?</label>
+          <input type="number" id="totalPersonas" class="modal-input" min="0" placeholder="Ej: 4" required>
+        </div>
+        <div class="modal-form-group">
+          <label>¿Cuántos menores de edad?</label>
+          <input type="number" id="menores" class="modal-input" min="0" placeholder="Ej: 2" required>
+        </div>
+        <div class="modal-form-group">
+          <label>¿Cuántos mayores de edad?</label>
+          <input type="number" id="mayores" class="modal-input" min="0" placeholder="Ej: 2" required>
+        </div>
+        <div class="modal-form-group">
+          <label>Nombres (opcional)</label>
+          <div id="personasList"></div>
+          <button type="button" class="add-persona-btn" onclick="addPersonaInput()">+ Agregar persona</button>
+        </div>
+        <button type="submit" class="modal-submit-btn">Guardar Vuelta 2</button>
+      </form>
+      <button class="modal-cancel" onclick="closeAllModals()">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Modal VUELTA 3 - Apoyo político -->
+  <div class="modal-overlay" id="vuelta3Modal">
+    <div class="modal-content">
+      <h3>VUELTA 3: ¿Cómo quiere ayudar?</h3>
+      <form id="vuelta3Form">
+        <div class="checkbox-grid" id="apoyoCheckboxes">
+          <label class="checkbox-item">
+            <input type="checkbox" name="apoyo" value="LONA">
+            <span>🏳️ LONA</span>
+          </label>
+          <label class="checkbox-item">
+            <input type="checkbox" name="apoyo" value="BARDA">
+            <span>🧱 BARDA</span>
+          </label>
+          <label class="checkbox-item">
+            <input type="checkbox" name="apoyo" value="CASILLA">
+            <span>🗳️ CASILLA</span>
+          </label>
+          <label class="checkbox-item">
+            <input type="checkbox" name="apoyo" value="MANZANERO">
+            <span>🏘️ MANZANERO</span>
+          </label>
+          <label class="checkbox-item">
+            <input type="checkbox" name="apoyo" value="PROMOTOR DE REDES">
+            <span>📱 PROMOTOR DE REDES</span>
+          </label>
+        </div>
+        <button type="submit" class="modal-submit-btn">Guardar Vuelta 3</button>
+      </form>
+      <button class="modal-cancel" onclick="closeAllModals()">Cancelar</button>
     </div>
   </div>
 
@@ -212,8 +392,14 @@
       <div class="legend-row"><span class="swatch" style="background:#9ca3af"></span>Gris: No abrió</div>
       <div class="legend-row"><span class="swatch" style="background:#1d4ed8"></span>Azul: Abrió y me escuchó</div>
       <div class="legend-row"><span class="swatch" style="background:#e63946"></span>Rojo: Abrió y NO me escuchó</div>
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid #e5e7eb;">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;">Progreso (Vueltas):</div>
+        <div class="legend-row" style="font-size:11px;">Borde blanco: Vuelta 1</div>
+        <div class="legend-row" style="font-size:11px;"><span style="display:inline-block;width:14px;height:3px;background:#10b981;border-radius:2px;margin-right:4px;"></span>Verde: Vuelta 2</div>
+        <div class="legend-row" style="font-size:11px;"><span style="display:inline-block;width:14px;height:3px;background:#f59e0b;border-radius:2px;margin-right:4px;"></span>Dorado: Vuelta 3 ✓</div>
+      </div>
       <div class="stat" id="stat"></div>
-      <div class="footer">Toca un predio para seleccionar su estado. Se guarda automáticamente.</div>
+      <div class="footer">Toca un predio para avanzar en las vueltas. Se guarda automáticamente.</div>
       <div class="legend-row" style="margin-top:8px;">
         <input type="checkbox" id="toggleNumbers" checked style="margin:0;">
         <label for="toggleNumbers" style="font-size:12px; cursor:pointer;">Mostrar número al acercar (zoom &ge; 17)</label>
@@ -335,6 +521,10 @@
               }
               statusById[row.id_predio] = st;
             }
+            // Cargar vuelta_actual
+            if (row.vuelta_actual !== undefined) {
+              vueltaActualById[row.id_predio] = row.vuelta_actual || 0;
+            }
           }
           saveStatus(statusById); // cache local para offline
           // Si hay cambios y existe la capa, redibujar todos los predios
@@ -388,33 +578,184 @@
     let currentPredioFeature = null;
     let currentPredioLayer = null;
     let currentPredioSeccion = null;
+    let vueltaActualById = {};
 
-    function openModal(id, feature, layer, seccion) {
-      currentPredioId = id;
-      currentPredioFeature = feature;
-      currentPredioLayer = layer;
-      currentPredioSeccion = seccion;
-      document.getElementById('statusModal').classList.add('active');
-    }
-
-    function closeModal() {
+    function closeAllModals() {
       currentPredioId = null;
       currentPredioFeature = null;
       currentPredioLayer = null;
       currentPredioSeccion = null;
-      document.getElementById('statusModal').classList.remove('active');
+      document.getElementById('vuelta1Modal').classList.remove('active');
+      document.getElementById('vuelta2Modal').classList.remove('active');
+      document.getElementById('vuelta3Modal').classList.remove('active');
     }
 
-    function selectStatus(status) {
-      if (!currentPredioId || !currentPredioFeature || !currentPredioLayer) return;
+    function openModalForVuelta(id, feature, layer, seccion) {
+      currentPredioId = id;
+      currentPredioFeature = feature;
+      currentPredioLayer = layer;
+      currentPredioSeccion = seccion;
 
-      statusById[currentPredioId] = status;
+      const vuelta = vueltaActualById[id] || 0;
+
+      if (vuelta === 0) {
+        // Primera vez, abrir vuelta 1
+        document.getElementById('vuelta1Modal').classList.add('active');
+      } else if (vuelta === 1) {
+        // Ya completó vuelta 1, abrir vuelta 2
+        document.getElementById('vuelta2Modal').classList.add('active');
+      } else if (vuelta === 2) {
+        // Ya completó vuelta 2, abrir vuelta 3
+        document.getElementById('vuelta3Modal').classList.add('active');
+      } else {
+        // Ya completó vuelta 3, mostrar info
+        alert('Este predio ya completó las 3 vueltas! 🎉');
+      }
+    }
+
+    async function guardarVuelta1(resultado) {
+      if (!currentPredioId) return;
+
+      const usuario = currentUser ? currentUser.name : null;
+
+      // Actualizar localmente
+      statusById[currentPredioId] = resultado;
+      vueltaActualById[currentPredioId] = 1;
+
       currentPredioLayer.setStyle({ ...styleFeature(currentPredioFeature), weight: 1.4, color: '#0f172a' });
       currentPredioLayer.bringToFront();
+
       saveStatus(statusById);
-      saveRemoteStatus(currentPredioId, status, currentPredioSeccion || null);
       updateStats(geoLayer);
-      closeModal();
+
+      // Guardar en API con nuevo endpoint
+      if (API_BASE) {
+        try {
+          await fetchJSON(`${API_BASE}/vuelta-1`, {
+            method: 'POST',
+            body: JSON.stringify({
+              id_predio: currentPredioId,
+              resultado,
+              seccion: currentPredioSeccion,
+              usuario
+            })
+          });
+        } catch (err) {
+          console.warn('Error guardando vuelta 1', err);
+        }
+      }
+
+      closeAllModals();
+    }
+
+    async function guardarVuelta2(e) {
+      e.preventDefault();
+      if (!currentPredioId) return;
+
+      const totalPersonas = parseInt(document.getElementById('totalPersonas').value);
+      const menores = parseInt(document.getElementById('menores').value);
+      const mayores = parseInt(document.getElementById('mayores').value);
+      const usuario = currentUser ? currentUser.name : null;
+
+      // Recolectar nombres de personas
+      const personas = [];
+      const personaInputs = document.querySelectorAll('.persona-nombre-input');
+      const personaCheckboxes = document.querySelectorAll('.persona-menor-checkbox');
+
+      personaInputs.forEach((input, index) => {
+        const nombre = input.value.trim();
+        if (nombre) {
+          personas.push({
+            nombre,
+            es_menor: personaCheckboxes[index] ? personaCheckboxes[index].checked : false
+          });
+        }
+      });
+
+      // Actualizar vuelta local
+      vueltaActualById[currentPredioId] = 2;
+
+      // Guardar en API
+      if (API_BASE) {
+        try {
+          await fetchJSON(`${API_BASE}/vuelta-2`, {
+            method: 'POST',
+            body: JSON.stringify({
+              id_predio: currentPredioId,
+              total_personas: totalPersonas,
+              menores,
+              mayores,
+              personas,
+              seccion: currentPredioSeccion,
+              usuario
+            })
+          });
+        } catch (err) {
+          console.warn('Error guardando vuelta 2', err);
+        }
+      }
+
+      // Limpiar formulario
+      document.getElementById('vuelta2Form').reset();
+      document.getElementById('personasList').innerHTML = '';
+
+      closeAllModals();
+      alert('Vuelta 2 guardada exitosamente! ✅');
+    }
+
+    async function guardarVuelta3(e) {
+      e.preventDefault();
+      if (!currentPredioId) return;
+
+      const checkboxes = document.querySelectorAll('#apoyoCheckboxes input[type="checkbox"]:checked');
+      const tiposApoyo = Array.from(checkboxes).map(cb => cb.value);
+
+      if (tiposApoyo.length === 0) {
+        alert('Selecciona al menos un tipo de apoyo');
+        return;
+      }
+
+      const usuario = currentUser ? currentUser.name : null;
+
+      // Actualizar vuelta local
+      vueltaActualById[currentPredioId] = 3;
+
+      // Guardar en API
+      if (API_BASE) {
+        try {
+          await fetchJSON(`${API_BASE}/vuelta-3`, {
+            method: 'POST',
+            body: JSON.stringify({
+              id_predio: currentPredioId,
+              tipos_apoyo: tiposApoyo,
+              seccion: currentPredioSeccion,
+              usuario
+            })
+          });
+        } catch (err) {
+          console.warn('Error guardando vuelta 3', err);
+        }
+      }
+
+      // Limpiar formulario
+      document.getElementById('vuelta3Form').reset();
+
+      closeAllModals();
+      alert('Vuelta 3 completada! El predio ya completó las 3 vueltas 🎉');
+    }
+
+    function addPersonaInput() {
+      const container = document.getElementById('personasList');
+      const item = document.createElement('div');
+      item.className = 'persona-item';
+      item.innerHTML = `
+        <input type="text" class="persona-nombre-input" placeholder="Nombre completo">
+        <label style="font-size:13px;white-space:nowrap;">
+          <input type="checkbox" class="persona-menor-checkbox"> Menor
+        </label>
+        <button type="button" onclick="this.parentElement.remove()">✕</button>
+      `;
+      container.appendChild(item);
     }
 
     function updateGeoStatus(text, color = '#b45309') {
@@ -587,27 +928,57 @@
     function styleFeature(feature) {
       const id = feature.properties?.clave_lote || feature.properties?.id || feature.id;
       const status = statusById[id] || 'neutral';
+      const vuelta = vueltaActualById[id] || 0;
+
+      let color = '#ffffff'; // Borde blanco por defecto
+      let weight = 1;
+      let fillOpacity = 0.65;
+
+      // Cambiar borde según vuelta
+      if (vuelta === 1) {
+        // Vuelta 1: borde blanco normal
+        color = '#ffffff';
+        weight = 1;
+      } else if (vuelta === 2) {
+        // Vuelta 2: borde verde
+        color = '#10b981';
+        weight = 2.5;
+        fillOpacity = 0.75;
+      } else if (vuelta === 3) {
+        // Vuelta 3: borde dorado
+        color = '#f59e0b';
+        weight = 3;
+        fillOpacity = 0.85;
+      }
+
       return {
-        color: '#ffffff',
-        weight: 1,
+        color,
+        weight,
         fillColor: STATUS_COLORS[status] || STATUS_COLORS.neutral,
-        fillOpacity: 0.65
+        fillOpacity
       };
     }
 
     function updateStats(layer) {
       const statEl = document.getElementById('stat');
       const seen = new Set();
-      const counts = { rojo: 0, azul: 0 };
+      const counts = { rojo: 0, azul: 0, vuelta1: 0, vuelta2: 0, vuelta3: 0 };
       layer.eachLayer(l => {
         const id = l.feature?.properties?.clave_lote || l.feature?.properties?.id || l.feature?.id;
         if (seen.has(id)) return;
         seen.add(id);
         const status = statusById[id] || 'neutral';
+        const vuelta = vueltaActualById[id] || 0;
         if (status === 'rojo') counts.rojo += 1;
         if (status === 'azul') counts.azul += 1;
+        if (vuelta === 1) counts.vuelta1 += 1;
+        if (vuelta === 2) counts.vuelta2 += 1;
+        if (vuelta === 3) counts.vuelta3 += 1;
       });
-      statEl.textContent = `Rojo: ${counts.rojo} · Azul: ${counts.azul}`;
+      statEl.innerHTML = `
+        <strong>Estado:</strong> Rojo: ${counts.rojo} · Azul: ${counts.azul}<br>
+        <strong>Progreso:</strong> V1: ${counts.vuelta1} · V2: ${counts.vuelta2} · V3: ${counts.vuelta3} ✓
+      `;
     }
 
     const WFS_URL = 'https://geoserver.sanpedro.gob.mx/wfs';
@@ -704,8 +1075,8 @@
                   const inside = isInAllowedPolygon(l.getBounds().getCenter());
                   if (!(attrAllowed || inside)) return;
                 }
-                // Abrir modal para seleccionar estado
-                openModal(id, feature, l, seccion);
+                // Abrir modal según vuelta actual
+                openModalForVuelta(id, feature, l, seccion);
               });
               const name = feature.properties?.ubicacion || '';
               const manzana = feature.properties?.manzana || '';
@@ -912,19 +1283,41 @@
     }
     loginBtn.addEventListener('click', handleLogin);
 
-    // Event listeners para los botones del modal
-    document.querySelectorAll('.modal-btn').forEach(btn => {
+    // Event listeners para los botones de VUELTA 1
+    document.querySelectorAll('#vuelta1Modal .modal-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const status = e.currentTarget.getAttribute('data-status');
-        selectStatus(status);
+        guardarVuelta1(status);
       });
     });
 
-    // Cerrar modal al hacer click fuera de él
-    document.getElementById('statusModal').addEventListener('click', (e) => {
-      if (e.target.id === 'statusModal') {
-        closeModal();
-      }
+    // Event listener para formulario de VUELTA 2
+    document.getElementById('vuelta2Form').addEventListener('submit', guardarVuelta2);
+
+    // Event listener para formulario de VUELTA 3
+    document.getElementById('vuelta3Form').addEventListener('submit', guardarVuelta3);
+
+    // Cerrar modales al hacer click fuera
+    document.getElementById('vuelta1Modal').addEventListener('click', (e) => {
+      if (e.target.id === 'vuelta1Modal') closeAllModals();
+    });
+    document.getElementById('vuelta2Modal').addEventListener('click', (e) => {
+      if (e.target.id === 'vuelta2Modal') closeAllModals();
+    });
+    document.getElementById('vuelta3Modal').addEventListener('click', (e) => {
+      if (e.target.id === 'vuelta3Modal') closeAllModals();
+    });
+
+    // Event listener para checkboxes de apoyo (efecto visual)
+    document.querySelectorAll('.checkbox-item').forEach(item => {
+      const checkbox = item.querySelector('input[type="checkbox"]');
+      checkbox.addEventListener('change', (e) => {
+        if (e.target.checked) {
+          item.classList.add('checked');
+        } else {
+          item.classList.remove('checked');
+        }
+      });
     });
 
   </script>
