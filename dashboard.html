@@ -36,6 +36,7 @@
     .stats-box .stat .label { font-size: 12px; color: #6b7280; }
     .inactive-list { max-height: 200px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 4px; }
     .inactive-list .chip { background: #fef3c7; color: #92400e; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+    .metric-help { margin: 8px 0 12px 0; padding: 10px 12px; border-radius: 8px; background: #f1f5f9; color: #334155; font-size: 12px; line-height: 1.45; }
   </style>
 </head>
 <body>
@@ -113,6 +114,13 @@
     <div id="corteStatus" style="margin-bottom:10px; font-size:13px; color:#334155;">
       Último corte: cargando...
     </div>
+    <div class="metric-help">
+      <strong>Qué significa cada número:</strong>
+      Total Predios = universo de predios de todas las secciones.
+      Trabajados (únicos) = predios distintos con estado capturado actualmente.
+      % Avance Global = Trabajados / Total Predios.
+      Rojos y Azules = conteo actual por color (estado vigente, no histórico).
+    </div>
 
     <!-- Stats globales -->
     <div class="stats-box" style="margin-bottom:20px; padding:16px; background:#f8fafc; border-radius:8px;">
@@ -187,6 +195,11 @@
   <!-- Resultados de Análisis -->
   <div class="card" style="margin-bottom:12px; display:none;" id="analyticsCard">
     <h3>Resultados de Actividad (logs históricos)</h3>
+    <div class="metric-help">
+      Estos números cuentan <strong>eventos en logs</strong>, no predios únicos.
+      Si un predio cambió varias veces, se cuenta varias veces.
+      El resultado depende de los filtros de Mes, Sección y Color.
+    </div>
     <div id="analyticsSummary" style="margin:8px 0; font-size:14px;"></div>
     <table id="analyticsTable">
       <thead><tr><th>Mes</th><th>Sección</th><th>Status</th><th>Usuario</th><th>Total</th></tr></thead>
