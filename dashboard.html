@@ -104,8 +104,14 @@
 
   <div class="card" style="margin-bottom:12px;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-      <h3 style="margin:0;">Resumen de Avance</h3>
-      <button class="btn btn-primary" onclick="loadResumen()">🔄 Actualizar</button>
+      <h3 style="margin:0;">Resumen de Avance Real (predios únicos)</h3>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary" onclick="loadResumen()">🔄 Actualizar</button>
+        <button class="btn btn-primary" onclick="generarCorte()">📌 Generar Corte</button>
+      </div>
+    </div>
+    <div id="corteStatus" style="margin-bottom:10px; font-size:13px; color:#334155;">
+      Último corte: cargando...
     </div>
 
     <!-- Stats globales -->
@@ -116,7 +122,7 @@
       </div>
       <div class="stat">
         <div class="number" style="color:#10b981;" id="totalTrabajados">-</div>
-        <div class="label">Trabajados</div>
+        <div class="label">Trabajados (únicos)</div>
       </div>
       <div class="stat">
         <div class="number" style="color:#f59e0b;" id="porcentajeGlobal">-</div>
@@ -180,7 +186,7 @@
 
   <!-- Resultados de Análisis -->
   <div class="card" style="margin-bottom:12px; display:none;" id="analyticsCard">
-    <h3>Resultados del Análisis</h3>
+    <h3>Resultados de Actividad (logs históricos)</h3>
     <div id="analyticsSummary" style="margin:8px 0; font-size:14px;"></div>
     <table id="analyticsTable">
       <thead><tr><th>Mes</th><th>Sección</th><th>Status</th><th>Usuario</th><th>Total</th></tr></thead>
@@ -572,7 +578,7 @@
 
         summary.innerHTML = `
           <strong>Resumen:</strong>
-          ${totalRegistros} cambios totales |
+          ${totalRegistros} cambios en logs |
           <span class="badge rojo">${rojos} rojos</span>
           <span class="badge azul">${azules} azules</span>
           <span class="badge neutral">${neutrales} neutrales</span> |
@@ -851,14 +857,49 @@
       }
     }
 
+    async function loadUltimoCorte() {
+      const statusEl = document.getElementById('corteStatus');
+      try {
+        const data = await fetchJSON('/cortes/ultimo');
+        if (!data.corte) {
+          statusEl.textContent = 'Último corte: no hay cortes generados todavía.';
+          return;
+        }
+        statusEl.textContent = `Último corte: #${data.corte.id} | ${fmtDate(data.corte.fecha_corte)} | Avance ${Number(data.corte.porcentaje_avance).toFixed(2)}% | ${Number(data.corte.predios_trabajados).toLocaleString()} trabajados`;
+      } catch (err) {
+        console.error('Error cargando último corte:', err);
+        statusEl.textContent = `Último corte: error (${err.message})`;
+      }
+    }
+
+    async function generarCorte() {
+      if (!confirm('Se generará un corte con el estado actual real. ¿Continuar?')) return;
+      const statusEl = document.getElementById('corteStatus');
+      statusEl.textContent = 'Generando corte...';
+
+      try {
+        const data = await fetchJSON('/cortes/generar', {
+          method: 'POST',
+          body: JSON.stringify({ usuario: isAdmin ? 'admin' : 'dashboard' })
+        });
+        statusEl.textContent = `Último corte: #${data.corte_id} | ${fmtDate(data.fecha_corte)} | Avance ${Number(data.porcentaje_avance).toFixed(2)}%`;
+        await loadResumen();
+      } catch (err) {
+        console.error('Error generando corte:', err);
+        statusEl.textContent = `Error al generar corte: ${err.message}`;
+      }
+    }
+
     // Cargar todo
     loadAll();
     loadSeccionalAnalytics();
     loadResumen();
+    loadUltimoCorte();
     setInterval(() => {
       loadAll();
       loadSeccionalAnalytics();
       loadResumen();
+      loadUltimoCorte();
     }, 60000);
   </script>
 </body>

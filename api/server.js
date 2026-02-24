@@ -67,9 +67,36 @@ async function initTables() {
       affected_count int,
       created_at timestamptz default now()
     );`,
+    `create table if not exists cortes (
+      id serial primary key,
+      usuario text,
+      total_predios int not null,
+      predios_trabajados int not null,
+      total_rojos int not null,
+      total_azules int not null,
+      total_neutrales int not null,
+      porcentaje_avance numeric(6,2) not null,
+      fecha_corte timestamptz not null default now(),
+      created_at timestamptz default now()
+    );`,
+    `create table if not exists cortes_detalle (
+      id serial primary key,
+      corte_id int not null references cortes(id) on delete cascade,
+      seccion text not null,
+      total_predios int not null,
+      predios_trabajados int not null,
+      porcentaje_avance numeric(6,2) not null,
+      total_rojos int not null,
+      total_azules int not null,
+      total_neutrales int not null,
+      created_at timestamptz default now(),
+      unique(corte_id, seccion)
+    );`,
     `create index if not exists idx_logs_created on predio_logs(created_at);`,
     `create index if not exists idx_logs_seccion on predio_logs(seccion);`,
-    `create index if not exists idx_logs_status on predio_logs(status);`
+    `create index if not exists idx_logs_status on predio_logs(status);`,
+    `create index if not exists idx_cortes_fecha on cortes(fecha_corte desc);`,
+    `create index if not exists idx_cortes_detalle_corte on cortes_detalle(corte_id);`
   ];
   for (const q of ddl) {
     await pool.query(q);
@@ -551,6 +578,59 @@ function cargarTotalesPorSeccion() {
   }
 }
 
+async function obtenerResumenAvanceActual(db = pool) {
+  const totalesPorSeccion = cargarTotalesPorSeccion();
+  const { rows } = await db.query(`
+    select
+      seccion,
+      count(distinct id_predio) as predios_trabajados,
+      count(distinct id_predio) filter (where status = 'rojo') as total_rojos,
+      count(distinct id_predio) filter (where status = 'azul') as total_azules,
+      count(distinct id_predio) filter (where status = 'neutral') as total_neutrales
+    from predios
+    where seccion is not null
+    group by seccion
+    order by seccion
+  `);
+
+  const resumen = [];
+  const seccionesConDatos = new Set(rows.map(r => r.seccion));
+
+  for (const row of rows) {
+    const total = totalesPorSeccion[row.seccion] || 0;
+    const trabajados = parseInt(row.predios_trabajados, 10) || 0;
+    const porcentaje = total > 0 ? ((trabajados / total) * 100).toFixed(2) : '0.00';
+
+    resumen.push({
+      seccion: row.seccion,
+      total_predios: total,
+      predios_trabajados: trabajados,
+      porcentaje_avance: parseFloat(porcentaje),
+      total_rojos: parseInt(row.total_rojos, 10) || 0,
+      total_azules: parseInt(row.total_azules, 10) || 0,
+      total_neutrales: parseInt(row.total_neutrales, 10) || 0
+    });
+  }
+
+  for (let i = 356; i <= 417; i++) {
+    const seccion = String(i);
+    if (!seccionesConDatos.has(seccion) && totalesPorSeccion[seccion]) {
+      resumen.push({
+        seccion,
+        total_predios: totalesPorSeccion[seccion],
+        predios_trabajados: 0,
+        porcentaje_avance: 0,
+        total_rojos: 0,
+        total_azules: 0,
+        total_neutrales: 0
+      });
+    }
+  }
+
+  resumen.sort((a, b) => parseInt(a.seccion, 10) - parseInt(b.seccion, 10));
+  return resumen;
+}
+
 // GET /health/totales -> endpoint público de health check (SIN auth)
 app.get('/health/totales', async (req, res) => {
   try {
@@ -674,65 +754,7 @@ app.get('/secciones/progreso', auth, async (req, res) => {
 // GET /secciones/resumen -> combina totales y progreso con porcentajes (SIN vueltas)
 app.get('/secciones/resumen', auth, async (req, res) => {
   try {
-    // Obtener totales desde caché
-    console.log('[GET /secciones/resumen] Cargando totales...');
-    const totalesPorSeccion = cargarTotalesPorSeccion();
-    console.log('[GET /secciones/resumen] Totales cargados:', Object.keys(totalesPorSeccion).length, 'secciones');
-
-    // Obtener progreso de la BD
-    const { rows } = await pool.query(`
-      select
-        seccion,
-        count(distinct id_predio) as predios_trabajados,
-        count(distinct id_predio) filter (where status = 'rojo') as total_rojos,
-        count(distinct id_predio) filter (where status = 'azul') as total_azules,
-        count(distinct id_predio) filter (where status = 'neutral') as total_neutrales
-      from predios
-      where seccion is not null
-      group by seccion
-      order by seccion
-    `);
-
-    // Combinar datos
-    const resumen = [];
-    const seccionesConDatos = new Set(rows.map(r => r.seccion));
-
-    // Agregar secciones con trabajo
-    for (const row of rows) {
-      const total = totalesPorSeccion[row.seccion] || 0;
-      const trabajados = parseInt(row.predios_trabajados) || 0;
-      const porcentaje = total > 0 ? ((trabajados / total) * 100).toFixed(2) : 0;
-
-      resumen.push({
-        seccion: row.seccion,
-        total_predios: total,
-        predios_trabajados: trabajados,
-        porcentaje_avance: parseFloat(porcentaje),
-        total_rojos: parseInt(row.total_rojos) || 0,
-        total_azules: parseInt(row.total_azules) || 0,
-        total_neutrales: parseInt(row.total_neutrales) || 0
-      });
-    }
-
-    // Agregar secciones sin trabajo (356-417)
-    for (let i = 356; i <= 417; i++) {
-      const seccion = String(i);
-      if (!seccionesConDatos.has(seccion) && totalesPorSeccion[seccion]) {
-        resumen.push({
-          seccion,
-          total_predios: totalesPorSeccion[seccion],
-          predios_trabajados: 0,
-          porcentaje_avance: 0,
-          total_rojos: 0,
-          total_azules: 0,
-          total_neutrales: 0
-        });
-      }
-    }
-
-    // Ordenar por número de sección
-    resumen.sort((a, b) => parseInt(a.seccion) - parseInt(b.seccion));
-
+    const resumen = await obtenerResumenAvanceActual(pool);
     res.json(resumen);
   } catch (err) {
     console.error('[GET /secciones/resumen] ERROR:', err);
@@ -742,6 +764,139 @@ app.get('/secciones/resumen', auth, async (req, res) => {
       message: err.message,
       stack: err.stack
     });
+  }
+});
+
+// POST /cortes/generar -> crea corte oficial desde estado actual (tabla predios)
+app.post('/cortes/generar', auth, async (req, res) => {
+  const usuario = req.body?.usuario || 'sistema';
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    const resumen = await obtenerResumenAvanceActual(client);
+
+    const totals = resumen.reduce((acc, row) => {
+      acc.total_predios += row.total_predios || 0;
+      acc.predios_trabajados += row.predios_trabajados || 0;
+      acc.total_rojos += row.total_rojos || 0;
+      acc.total_azules += row.total_azules || 0;
+      acc.total_neutrales += row.total_neutrales || 0;
+      return acc;
+    }, {
+      total_predios: 0,
+      predios_trabajados: 0,
+      total_rojos: 0,
+      total_azules: 0,
+      total_neutrales: 0
+    });
+
+    const porcentajeGlobal = totals.total_predios > 0
+      ? ((totals.predios_trabajados / totals.total_predios) * 100).toFixed(2)
+      : '0.00';
+
+    const corteInsert = await client.query(
+      `insert into cortes (
+        usuario, total_predios, predios_trabajados, total_rojos, total_azules,
+        total_neutrales, porcentaje_avance, fecha_corte, created_at
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, now(), now())
+      returning id, fecha_corte`,
+      [
+        usuario,
+        totals.total_predios,
+        totals.predios_trabajados,
+        totals.total_rojos,
+        totals.total_azules,
+        totals.total_neutrales,
+        porcentajeGlobal
+      ]
+    );
+
+    const corte = corteInsert.rows[0];
+    for (const row of resumen) {
+      await client.query(
+        `insert into cortes_detalle (
+          corte_id, seccion, total_predios, predios_trabajados, porcentaje_avance,
+          total_rojos, total_azules, total_neutrales, created_at
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, now())`,
+        [
+          corte.id,
+          row.seccion,
+          row.total_predios,
+          row.predios_trabajados,
+          row.porcentaje_avance || 0,
+          row.total_rojos || 0,
+          row.total_azules || 0,
+          row.total_neutrales || 0
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    res.json({
+      ok: true,
+      corte_id: corte.id,
+      fecha_corte: corte.fecha_corte,
+      usuario,
+      ...totals,
+      porcentaje_avance: parseFloat(porcentajeGlobal),
+      secciones: resumen.length
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[POST /cortes/generar] ERROR:', err);
+    res.status(500).json({ error: 'db_error', message: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /cortes/ultimo -> obtiene último corte generado con su detalle
+app.get('/cortes/ultimo', auth, async (req, res) => {
+  try {
+    const { rows: cortesRows } = await pool.query(`
+      select
+        id,
+        usuario,
+        total_predios,
+        predios_trabajados,
+        total_rojos,
+        total_azules,
+        total_neutrales,
+        porcentaje_avance,
+        fecha_corte,
+        created_at
+      from cortes
+      order by fecha_corte desc, id desc
+      limit 1
+    `);
+
+    if (cortesRows.length === 0) {
+      return res.json({ ok: true, corte: null });
+    }
+
+    const corte = cortesRows[0];
+    const { rows: detalle } = await pool.query(`
+      select
+        seccion,
+        total_predios,
+        predios_trabajados,
+        porcentaje_avance,
+        total_rojos,
+        total_azules,
+        total_neutrales
+      from cortes_detalle
+      where corte_id = $1
+      order by cast(seccion as integer)
+    `, [corte.id]);
+
+    res.json({ ok: true, corte, detalle });
+  } catch (err) {
+    console.error('[GET /cortes/ultimo] ERROR:', err);
+    res.status(500).json({ error: 'db_error', message: err.message });
   }
 });
 
