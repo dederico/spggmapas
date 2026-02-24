@@ -547,6 +547,45 @@ function cargarTotalesPorSeccion() {
   }
 }
 
+// GET /debug/totales -> endpoint de debug para verificar carga de archivo
+app.get('/debug/totales', auth, async (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+
+  try {
+    const totalesPath = path.join(__dirname, '../data/totales_por_seccion.json');
+
+    // Verificar si existe
+    const exists = fs.existsSync(totalesPath);
+    if (!exists) {
+      return res.json({
+        error: 'FILE_NOT_FOUND',
+        path: totalesPath,
+        cwd: __dirname
+      });
+    }
+
+    // Intentar leer
+    const content = fs.readFileSync(totalesPath, 'utf8');
+    const data = JSON.parse(content);
+
+    res.json({
+      success: true,
+      path: totalesPath,
+      fileSize: content.length,
+      secciones: Object.keys(data).length,
+      totalPredios: Object.values(data).reduce((a,b) => a+b, 0),
+      sample: Object.entries(data).slice(0, 3)
+    });
+  } catch (err) {
+    res.json({
+      error: 'LOAD_ERROR',
+      message: err.message,
+      stack: err.stack
+    });
+  }
+});
+
 // GET /secciones/totales -> obtener total de predios por sección (usa caché)
 app.get('/secciones/totales', auth, async (req, res) => {
   try {
@@ -563,7 +602,7 @@ app.get('/secciones/totales', auth, async (req, res) => {
     res.json(resultado);
   } catch (err) {
     console.error('[GET /secciones/totales] ERROR:', err);
-    res.status(500).json({ error: 'spatial_intersection_error', message: err.message });
+    res.status(500).json({ error: 'spatial_intersection_error', message: err.message, stack: err.stack });
   }
 });
 
@@ -593,7 +632,9 @@ app.get('/secciones/progreso', auth, async (req, res) => {
 app.get('/secciones/resumen', auth, async (req, res) => {
   try {
     // Obtener totales desde caché
+    console.log('[GET /secciones/resumen] Cargando totales...');
     const totalesPorSeccion = cargarTotalesPorSeccion();
+    console.log('[GET /secciones/resumen] Totales cargados:', Object.keys(totalesPorSeccion).length, 'secciones');
 
     // Obtener progreso de la BD
     const { rows } = await pool.query(`
@@ -652,7 +693,12 @@ app.get('/secciones/resumen', auth, async (req, res) => {
     res.json(resumen);
   } catch (err) {
     console.error('[GET /secciones/resumen] ERROR:', err);
-    res.status(500).json({ error: 'error al generar resumen' });
+    console.error('[GET /secciones/resumen] Stack:', err.stack);
+    res.status(500).json({
+      error: 'error al generar resumen',
+      message: err.message,
+      stack: err.stack
+    });
   }
 });
 
