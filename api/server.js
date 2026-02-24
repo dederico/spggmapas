@@ -519,6 +519,162 @@ app.get('/admin/reset-audit', auth, async (req, res) => {
   }
 });
 
+// GET /secciones/totales -> obtener total de predios por sección desde WFS
+app.get('/secciones/totales', auth, async (req, res) => {
+  try {
+    const WFS_URL = 'https://geoserver.sanpedro.gob.mx/wfs';
+    const params = new URLSearchParams({
+      service: 'WFS',
+      version: '1.0.0',
+      request: 'GetFeature',
+      typeName: 'vu:predio',
+      outputFormat: 'application/json',
+      maxFeatures: 100000
+    });
+
+    const response = await fetch(`${WFS_URL}?${params}`);
+    const data = await response.json();
+
+    // Contar predios por sección
+    const totalesPorSeccion = {};
+
+    if (data.features) {
+      for (const feature of data.features) {
+        const seccion = feature.properties?.seccion || feature.properties?.SECCION;
+        if (seccion) {
+          const seccionStr = String(seccion);
+          totalesPorSeccion[seccionStr] = (totalesPorSeccion[seccionStr] || 0) + 1;
+        }
+      }
+    }
+
+    // Convertir a array ordenado
+    const resultado = Object.entries(totalesPorSeccion)
+      .map(([seccion, total]) => ({ seccion, total_predios: total }))
+      .sort((a, b) => {
+        const numA = parseInt(a.seccion);
+        const numB = parseInt(b.seccion);
+        return numA - numB;
+      });
+
+    res.json(resultado);
+  } catch (err) {
+    console.error('[GET /secciones/totales] ERROR:', err);
+    res.status(500).json({ error: 'wfs_error' });
+  }
+});
+
+// GET /secciones/progreso -> obtener predios trabajados por sección (SIN vueltas)
+app.get('/secciones/progreso', auth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      select
+        seccion,
+        count(distinct id_predio) as predios_trabajados,
+        count(distinct id_predio) filter (where status = 'rojo') as total_rojos,
+        count(distinct id_predio) filter (where status = 'azul') as total_azules,
+        count(distinct id_predio) filter (where status = 'neutral') as total_neutrales
+      from predios
+      where seccion is not null
+      group by seccion
+      order by seccion
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error('[GET /secciones/progreso] ERROR:', err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// GET /secciones/resumen -> combina totales y progreso con porcentajes (SIN vueltas)
+app.get('/secciones/resumen', auth, async (req, res) => {
+  try {
+    // Obtener totales del WFS
+    const WFS_URL = 'https://geoserver.sanpedro.gob.mx/wfs';
+    const params = new URLSearchParams({
+      service: 'WFS',
+      version: '1.0.0',
+      request: 'GetFeature',
+      typeName: 'vu:predio',
+      outputFormat: 'application/json',
+      maxFeatures: 100000
+    });
+
+    const response = await fetch(`${WFS_URL}?${params}`);
+    const data = await response.json();
+
+    const totalesPorSeccion = {};
+    if (data.features) {
+      for (const feature of data.features) {
+        const seccion = feature.properties?.seccion || feature.properties?.SECCION;
+        if (seccion) {
+          const seccionStr = String(seccion);
+          totalesPorSeccion[seccionStr] = (totalesPorSeccion[seccionStr] || 0) + 1;
+        }
+      }
+    }
+
+    // Obtener progreso de la BD
+    const { rows } = await pool.query(`
+      select
+        seccion,
+        count(distinct id_predio) as predios_trabajados,
+        count(distinct id_predio) filter (where status = 'rojo') as total_rojos,
+        count(distinct id_predio) filter (where status = 'azul') as total_azules,
+        count(distinct id_predio) filter (where status = 'neutral') as total_neutrales
+      from predios
+      where seccion is not null
+      group by seccion
+      order by seccion
+    `);
+
+    // Combinar datos
+    const resumen = [];
+    const seccionesConDatos = new Set(rows.map(r => r.seccion));
+
+    // Agregar secciones con trabajo
+    for (const row of rows) {
+      const total = totalesPorSeccion[row.seccion] || 0;
+      const trabajados = parseInt(row.predios_trabajados) || 0;
+      const porcentaje = total > 0 ? ((trabajados / total) * 100).toFixed(2) : 0;
+
+      resumen.push({
+        seccion: row.seccion,
+        total_predios: total,
+        predios_trabajados: trabajados,
+        porcentaje_avance: parseFloat(porcentaje),
+        total_rojos: parseInt(row.total_rojos) || 0,
+        total_azules: parseInt(row.total_azules) || 0,
+        total_neutrales: parseInt(row.total_neutrales) || 0
+      });
+    }
+
+    // Agregar secciones sin trabajo (356-417)
+    for (let i = 356; i <= 417; i++) {
+      const seccion = String(i);
+      if (!seccionesConDatos.has(seccion) && totalesPorSeccion[seccion]) {
+        resumen.push({
+          seccion,
+          total_predios: totalesPorSeccion[seccion],
+          predios_trabajados: 0,
+          porcentaje_avance: 0,
+          total_rojos: 0,
+          total_azules: 0,
+          total_neutrales: 0
+        });
+      }
+    }
+
+    // Ordenar por número de sección
+    resumen.sort((a, b) => parseInt(a.seccion) - parseInt(b.seccion));
+
+    res.json(resumen);
+  } catch (err) {
+    console.error('[GET /secciones/resumen] ERROR:', err);
+    res.status(500).json({ error: 'error al generar resumen' });
+  }
+});
+
 initTables()
   .then(() => {
     app.listen(PORT, () => console.log(`API escuchando en puerto ${PORT}`));

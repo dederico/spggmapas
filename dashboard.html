@@ -99,6 +99,57 @@
     </table>
   </div>
 
+  <!-- PROGRESO POR SECCIÓN -->
+  <h2 style="margin: 24px 0 12px 0;">📊 Progreso por Sección</h2>
+
+  <div class="card" style="margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h3 style="margin:0;">Resumen de Avance</h3>
+      <button class="btn btn-primary" onclick="loadResumen()">🔄 Actualizar</button>
+    </div>
+
+    <!-- Stats globales -->
+    <div class="stats-box" style="margin-bottom:20px; padding:16px; background:#f8fafc; border-radius:8px;">
+      <div class="stat">
+        <div class="number" style="color:#2563eb;" id="totalPredios">-</div>
+        <div class="label">Total Predios</div>
+      </div>
+      <div class="stat">
+        <div class="number" style="color:#10b981;" id="totalTrabajados">-</div>
+        <div class="label">Trabajados</div>
+      </div>
+      <div class="stat">
+        <div class="number" style="color:#f59e0b;" id="porcentajeGlobal">-</div>
+        <div class="label">% Avance Global</div>
+      </div>
+      <div class="stat">
+        <div class="number" style="color:#dc2626;" id="totalRojos">-</div>
+        <div class="label">Rojos</div>
+      </div>
+      <div class="stat">
+        <div class="number" style="color:#2563eb;" id="totalAzules">-</div>
+        <div class="label">Azules</div>
+      </div>
+    </div>
+
+    <!-- Tabla de progreso por sección -->
+    <table id="resumenTable">
+      <thead>
+        <tr>
+          <th>Sección</th>
+          <th>Total Predios</th>
+          <th>Trabajados</th>
+          <th>Avance</th>
+          <th>Rojos</th>
+          <th>Azules</th>
+          <th>Neutrales</th>
+          <th>Progreso</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
   <!-- Filtros de Análisis -->
   <div class="card" style="margin-bottom:12px;">
     <h3 style="margin:0 0 12px 0;">Análisis de Datos</h3>
@@ -732,12 +783,82 @@
       }
     }
 
+    // Cargar resumen de progreso por sección
+    async function loadResumen() {
+      try {
+        const data = await fetchJSON('/secciones/resumen');
+
+        // Calcular totales globales
+        let globalTotalPredios = 0;
+        let globalTrabajados = 0;
+        let globalRojos = 0;
+        let globalAzules = 0;
+        let globalNeutrales = 0;
+
+        data.forEach(row => {
+          globalTotalPredios += row.total_predios || 0;
+          globalTrabajados += row.predios_trabajados || 0;
+          globalRojos += row.total_rojos || 0;
+          globalAzules += row.total_azules || 0;
+          globalNeutrales += row.total_neutrales || 0;
+        });
+
+        const porcentajeGlobal = globalTotalPredios > 0
+          ? ((globalTrabajados / globalTotalPredios) * 100).toFixed(1)
+          : 0;
+
+        // Actualizar stats globales
+        document.getElementById('totalPredios').textContent = globalTotalPredios.toLocaleString();
+        document.getElementById('totalTrabajados').textContent = globalTrabajados.toLocaleString();
+        document.getElementById('porcentajeGlobal').textContent = porcentajeGlobal + '%';
+        document.getElementById('totalRojos').textContent = globalRojos.toLocaleString();
+        document.getElementById('totalAzules').textContent = globalAzules.toLocaleString();
+
+        // Llenar tabla de secciones
+        const tbody = document.querySelector('#resumenTable tbody');
+        tbody.innerHTML = '';
+
+        data.forEach(row => {
+          const tr = document.createElement('tr');
+          const porcentaje = row.porcentaje_avance || 0;
+
+          // Color según porcentaje
+          let barColor = '#ef4444'; // rojo < 25%
+          if (porcentaje >= 75) barColor = '#10b981'; // verde >= 75%
+          else if (porcentaje >= 50) barColor = '#fbbf24'; // amarillo >= 50%
+          else if (porcentaje >= 25) barColor = '#f97316'; // naranja >= 25%
+
+          tr.innerHTML = `
+            <td><strong>${row.seccion}</strong></td>
+            <td>${row.total_predios || 0}</td>
+            <td>${row.predios_trabajados || 0}</td>
+            <td><strong>${porcentaje.toFixed(1)}%</strong></td>
+            <td><span class="badge rojo">${row.total_rojos || 0}</span></td>
+            <td><span class="badge azul">${row.total_azules || 0}</span></td>
+            <td><span class="badge neutral">${row.total_neutrales || 0}</span></td>
+            <td>
+              <div style="background:#e5e7eb;border-radius:4px;overflow:hidden;height:20px;">
+                <div style="background:${barColor};height:100%;width:${porcentaje}%;transition:width 0.3s;"></div>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+      } catch (err) {
+        console.error('Error cargando resumen de progreso:', err);
+        alert('Error al cargar el resumen de progreso: ' + err.message);
+      }
+    }
+
     // Cargar todo
     loadAll();
     loadSeccionalAnalytics();
+    loadResumen();
     setInterval(() => {
       loadAll();
       loadSeccionalAnalytics();
+      loadResumen();
     }, 60000);
   </script>
 </body>
