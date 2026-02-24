@@ -519,34 +519,59 @@ app.get('/admin/reset-audit', auth, async (req, res) => {
   }
 });
 
-// GET /secciones/totales -> obtener total de predios por sección desde WFS
+// GET /secciones/totales -> obtener total de predios por sección mediante intersección espacial
 app.get('/secciones/totales', auth, async (req, res) => {
   try {
-    const WFS_URL = 'https://geoserver.sanpedro.gob.mx/wfs';
-    const params = new URLSearchParams({
-      service: 'WFS',
-      version: '1.0.0',
-      request: 'GetFeature',
-      typeName: 'vu:predio',
-      outputFormat: 'application/json',
-      maxFeatures: 100000
-    });
+    const fs = require('fs');
+    const path = require('path');
+    const turf = require('@turf/turf');
 
-    const response = await fetch(`${WFS_URL}?${params}`);
-    const data = await response.json();
+    // Leer archivo de secciones (polígonos del INE)
+    const seccionesPath = path.join(__dirname, '../data/secciones_spgg.geojson');
+    const secciones = JSON.parse(fs.readFileSync(seccionesPath, 'utf8'));
 
-    // Contar predios por sección
+    // Leer archivo de predios (puntos)
+    const prediosPath = path.join(__dirname, '../data/predios_wgs84.geojson');
+    const predios = JSON.parse(fs.readFileSync(prediosPath, 'utf8'));
+
+    // Contar predios por sección mediante intersección espacial
     const totalesPorSeccion = {};
 
-    if (data.features) {
-      for (const feature of data.features) {
-        const seccion = feature.properties?.seccion || feature.properties?.SECCION;
-        if (seccion) {
-          const seccionStr = String(seccion);
-          totalesPorSeccion[seccionStr] = (totalesPorSeccion[seccionStr] || 0) + 1;
+    // Inicializar contador para cada sección
+    for (const seccionFeature of secciones.features) {
+      const seccionNum = String(seccionFeature.properties.SECCION);
+      totalesPorSeccion[seccionNum] = 0;
+    }
+
+    // Contar predios en cada sección
+    for (const predio of predios.features) {
+      // Extraer punto del predio (puede ser punto o polígono)
+      let punto;
+      if (predio.geometry.type === 'Point') {
+        punto = predio;
+      } else if (predio.geometry.type === 'Polygon' || predio.geometry.type === 'MultiPolygon') {
+        // Usar el centroide si es un polígono
+        punto = turf.centroid(predio);
+      } else {
+        continue;
+      }
+
+      // Buscar en qué sección cae este punto
+      for (const seccionFeature of secciones.features) {
+        try {
+          if (turf.booleanPointInPolygon(punto, seccionFeature)) {
+            const seccionNum = String(seccionFeature.properties.SECCION);
+            totalesPorSeccion[seccionNum]++;
+            break; // Un predio solo puede estar en una sección
+          }
+        } catch (e) {
+          // Ignorar errores de geometría inválida
+          continue;
         }
       }
     }
+
+    console.log('[GET /secciones/totales] Secciones procesadas:', Object.keys(totalesPorSeccion).length);
 
     // Convertir a array ordenado
     const resultado = Object.entries(totalesPorSeccion)
@@ -560,7 +585,7 @@ app.get('/secciones/totales', auth, async (req, res) => {
     res.json(resultado);
   } catch (err) {
     console.error('[GET /secciones/totales] ERROR:', err);
-    res.status(500).json({ error: 'wfs_error' });
+    res.status(500).json({ error: 'spatial_intersection_error', message: err.message });
   }
 });
 
@@ -589,30 +614,50 @@ app.get('/secciones/progreso', auth, async (req, res) => {
 // GET /secciones/resumen -> combina totales y progreso con porcentajes (SIN vueltas)
 app.get('/secciones/resumen', auth, async (req, res) => {
   try {
-    // Obtener totales del WFS
-    const WFS_URL = 'https://geoserver.sanpedro.gob.mx/wfs';
-    const params = new URLSearchParams({
-      service: 'WFS',
-      version: '1.0.0',
-      request: 'GetFeature',
-      typeName: 'vu:predio',
-      outputFormat: 'application/json',
-      maxFeatures: 100000
-    });
+    const fs = require('fs');
+    const path = require('path');
+    const turf = require('@turf/turf');
 
-    const response = await fetch(`${WFS_URL}?${params}`);
-    const data = await response.json();
+    // Obtener totales mediante intersección espacial
+    const seccionesPath = path.join(__dirname, '../data/secciones_spgg.geojson');
+    const secciones = JSON.parse(fs.readFileSync(seccionesPath, 'utf8'));
+
+    const prediosPath = path.join(__dirname, '../data/predios_wgs84.geojson');
+    const predios = JSON.parse(fs.readFileSync(prediosPath, 'utf8'));
 
     const totalesPorSeccion = {};
-    if (data.features) {
-      for (const feature of data.features) {
-        const seccion = feature.properties?.seccion || feature.properties?.SECCION;
-        if (seccion) {
-          const seccionStr = String(seccion);
-          totalesPorSeccion[seccionStr] = (totalesPorSeccion[seccionStr] || 0) + 1;
+
+    // Inicializar contador para cada sección
+    for (const seccionFeature of secciones.features) {
+      const seccionNum = String(seccionFeature.properties.SECCION);
+      totalesPorSeccion[seccionNum] = 0;
+    }
+
+    // Contar predios en cada sección
+    for (const predio of predios.features) {
+      let punto;
+      if (predio.geometry.type === 'Point') {
+        punto = predio;
+      } else if (predio.geometry.type === 'Polygon' || predio.geometry.type === 'MultiPolygon') {
+        punto = turf.centroid(predio);
+      } else {
+        continue;
+      }
+
+      for (const seccionFeature of secciones.features) {
+        try {
+          if (turf.booleanPointInPolygon(punto, seccionFeature)) {
+            const seccionNum = String(seccionFeature.properties.SECCION);
+            totalesPorSeccion[seccionNum]++;
+            break;
+          }
+        } catch (e) {
+          continue;
         }
       }
     }
+
+    console.log('[GET /secciones/resumen] Total secciones procesadas:', Object.keys(totalesPorSeccion).length);
 
     // Obtener progreso de la BD
     const { rows } = await pool.query(`
