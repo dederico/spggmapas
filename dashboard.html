@@ -99,6 +99,53 @@
     </table>
   </div>
 
+  <!-- PROGRESO POR SECCIÓN -->
+  <h2 style="margin: 24px 0 12px 0;">📊 Progreso por Sección</h2>
+
+  <div class="card" style="margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h3 style="margin:0;">Resumen de Avance</h3>
+      <button class="btn btn-primary" onclick="loadResumen()">🔄 Actualizar</button>
+    </div>
+
+    <!-- Stats globales -->
+    <div class="stats-box" style="margin-bottom:20px; padding:16px; background:#f8fafc; border-radius:8px;">
+      <div class="stat">
+        <div class="number" style="color:#2563eb;" id="totalPredios">-</div>
+        <div class="label">Total Predios</div>
+      </div>
+      <div class="stat">
+        <div class="number" style="color:#10b981;" id="totalTrabajados">-</div>
+        <div class="label">Trabajados</div>
+      </div>
+      <div class="stat">
+        <div class="number" style="color:#f59e0b;" id="porcentajeGlobal">-</div>
+        <div class="label">% Avance Global</div>
+      </div>
+      <div class="stat">
+        <div class="number" style="color:#8b5cf6;" id="totalV3">-</div>
+        <div class="label">Vuelta 3 Completa</div>
+      </div>
+    </div>
+
+    <!-- Tabla de progreso por sección -->
+    <table id="resumenTable">
+      <thead>
+        <tr>
+          <th>Sección</th>
+          <th>Total Predios</th>
+          <th>Trabajados</th>
+          <th>Avance</th>
+          <th>V1</th>
+          <th>V2</th>
+          <th>V3</th>
+          <th>Progreso</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
   <!-- Filtros de Análisis -->
   <div class="card" style="margin-bottom:12px;">
     <h3 style="margin:0 0 12px 0;">Análisis de Datos</h3>
@@ -732,11 +779,81 @@
       }
     }
 
+    // Cargar resumen de progreso por sección
+    async function loadResumen() {
+      try {
+        const data = await fetchJSON('/secciones/resumen');
+
+        // Calcular totales globales
+        let totalPrediosGlobal = 0;
+        let totalTrabajadosGlobal = 0;
+        let totalV3Global = 0;
+
+        data.forEach(row => {
+          totalPrediosGlobal += row.total_predios || 0;
+          totalTrabajadosGlobal += row.predios_trabajados || 0;
+          totalV3Global += row.vuelta_3_completados || 0;
+        });
+
+        const porcentajeGlobal = totalPrediosGlobal > 0
+          ? ((totalTrabajadosGlobal / totalPrediosGlobal) * 100).toFixed(1)
+          : 0;
+
+        // Actualizar stats globales
+        document.getElementById('totalPredios').textContent = totalPrediosGlobal.toLocaleString();
+        document.getElementById('totalTrabajados').textContent = totalTrabajadosGlobal.toLocaleString();
+        document.getElementById('porcentajeGlobal').textContent = porcentajeGlobal + '%';
+        document.getElementById('totalV3').textContent = totalV3Global.toLocaleString();
+
+        // Llenar tabla
+        const tbody = document.querySelector('#resumenTable tbody');
+        tbody.innerHTML = '';
+
+        data.forEach(row => {
+          const tr = document.createElement('tr');
+
+          // Calcular color de avance
+          const avance = row.porcentaje_avance || 0;
+          let colorAvance = '#dc2626'; // rojo por defecto
+          if (avance >= 75) colorAvance = '#16a34a'; // verde
+          else if (avance >= 50) colorAvance = '#f59e0b'; // amarillo
+          else if (avance >= 25) colorAvance = '#fb923c'; // naranja
+
+          // Crear barra de progreso
+          const barraProgreso = `
+            <div style="width:100%;background:#e5e7eb;border-radius:4px;height:20px;position:relative;overflow:hidden;">
+              <div style="width:${avance}%;background:${colorAvance};height:100%;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:bold;">
+                ${avance > 10 ? avance.toFixed(1) + '%' : ''}
+              </div>
+              ${avance <= 10 ? `<div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:#374151;font-size:11px;font-weight:bold;">${avance.toFixed(1)}%</div>` : ''}
+            </div>
+          `;
+
+          tr.innerHTML = `
+            <td><strong>Sección ${row.seccion}</strong></td>
+            <td>${row.total_predios.toLocaleString()}</td>
+            <td>${row.predios_trabajados.toLocaleString()}</td>
+            <td style="color:${colorAvance};font-weight:bold;">${avance.toFixed(1)}%</td>
+            <td><span class="badge azul">${row.vuelta_1_completados || 0}</span></td>
+            <td><span class="badge" style="background:#10b981;color:white;">${row.vuelta_2_completados || 0}</span></td>
+            <td><span class="badge" style="background:#8b5cf6;color:white;">${row.vuelta_3_completados || 0}</span></td>
+            <td style="min-width:120px;">${barraProgreso}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error('Error cargando resumen:', err);
+        alert('Error al cargar resumen de progreso: ' + err.message);
+      }
+    }
+
     // Cargar todo
     loadAll();
+    loadResumen();
     loadSeccionalAnalytics();
     setInterval(() => {
       loadAll();
+      loadResumen();
       loadSeccionalAnalytics();
     }, 60000);
   </script>

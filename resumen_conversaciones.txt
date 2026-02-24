@@ -41,3 +41,17 @@ IMPLEMENTACIÓN SISTEMA DE 3 VUELTAS:
     - Vuelta 3: borde dorado más grueso
   * Panel de estadísticas actualizado muestra progreso por vuelta
   * Leyenda explica sistema de colores y bordes
+
+ENDPOINTS DE PROGRESO POR SECCIÓN:
+- API (server.js) - Nuevos endpoints:
+  * GET /secciones/totales - Consulta WFS de geoserver y cuenta predios por sección
+  * GET /secciones/progreso - Consulta BD y devuelve predios trabajados por sección
+  * GET /secciones/resumen - Combina ambos con porcentajes de avance
+
+- Dashboard (dashboard.html):
+  * Nueva sección "Progreso por Sección" al inicio
+  * Stats globales: Total predios, trabajados, % avance, vuelta 3 completados
+  * Tabla con progreso detallado por sección (356-417)
+  * Barras de progreso visuales con colores según avance
+  * Muestra V1, V2, V3 completados por sección
+  * Auto-refresh cada 60 segundos
