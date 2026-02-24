@@ -1,6 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import { Pool } from 'pg';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const {
   PORT = 3000,
@@ -528,9 +535,6 @@ function cargarTotalesPorSeccion() {
   }
 
   try {
-    const fs = require('fs');
-    const path = require('path');
-
     console.log('[cargarTotalesPorSeccion] Cargando totales pre-calculados...');
 
     // Leer archivo JSON con totales pre-calculados
@@ -549,9 +553,6 @@ function cargarTotalesPorSeccion() {
 
 // GET /health/totales -> endpoint público de health check (SIN auth)
 app.get('/health/totales', async (req, res) => {
-  const fs = require('fs');
-  const path = require('path');
-
   try {
     const totalesPath = path.join(__dirname, '../data/totales_por_seccion.json');
 
@@ -594,9 +595,6 @@ app.get('/health/totales', async (req, res) => {
 
 // GET /debug/totales -> endpoint de debug para verificar carga de archivo
 app.get('/debug/totales', auth, async (req, res) => {
-  const fs = require('fs');
-  const path = require('path');
-
   try {
     const totalesPath = path.join(__dirname, '../data/totales_por_seccion.json');
 
