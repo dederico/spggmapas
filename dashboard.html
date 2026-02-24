@@ -37,6 +37,19 @@
     .inactive-list { max-height: 200px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 4px; }
     .inactive-list .chip { background: #fef3c7; color: #92400e; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
     .metric-help { margin: 8px 0 12px 0; padding: 10px 12px; border-radius: 8px; background: #f1f5f9; color: #334155; font-size: 12px; line-height: 1.45; }
+    details.fold { margin: 12px 0; }
+    details.fold > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #e2e8f0;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    details.fold > summary::-webkit-details-marker { display: none; }
+    details.fold > summary::after { content: ' +'; float: right; }
+    details.fold[open] > summary::after { content: ' -'; }
   </style>
 </head>
 <body>
@@ -114,13 +127,7 @@
     <div id="corteStatus" style="margin-bottom:10px; font-size:13px; color:#334155;">
       Último corte: cargando...
     </div>
-    <div class="metric-help">
-      <strong>Qué significa cada número:</strong>
-      Total Predios = universo de predios de todas las secciones.
-      Trabajados (únicos) = predios distintos con estado capturado actualmente.
-      % Avance Global = Trabajados / Total Predios.
-      Rojos y Azules = conteo actual por color (estado vigente, no histórico).
-    </div>
+    <div class="metric-help">Estado actual real: cada predio cuenta una sola vez con su color vigente.</div>
 
     <!-- Stats globales -->
     <div class="stats-box" style="margin-bottom:20px; padding:16px; background:#f8fafc; border-radius:8px;">
@@ -167,12 +174,8 @@
   <!-- PROGRESO POR PERIODO -->
   <div class="card" style="margin-bottom:12px;">
     <h3 style="margin:0 0 12px 0;">Progreso por periodo (contra total de predios)</h3>
-    <div class="metric-help">
-      Esta tabla mide lo caminado entre fecha de inicio y final, comparado contra el total de predios de cada sección.
-      Los colores se calculan con el último estado de cada predio dentro del rango seleccionado,
-      por lo que rojo + azul + gris siempre coincide con visitados.
-    </div>
-    <div class="filters">
+    <div class="metric-help">Periodo seleccionado contra total por sección. Los colores usan el último estado del predio en el rango.</div>
+  <div class="filters">
       <label>
         Fecha inicio
         <input type="date" id="periodoInicio">
@@ -211,158 +214,111 @@
     </div>
   </div>
 
-  <!-- Filtros de Análisis -->
-  <div class="card" style="margin-bottom:12px;">
-    <h3 style="margin:0 0 12px 0;">Análisis de Datos</h3>
-    <div class="filters">
-      <label>
-        Mes
-        <input type="month" id="filterMonth" placeholder="2026-01">
-      </label>
-      <label>
-        Sección
-        <input type="text" id="filterSeccion" placeholder="356">
-      </label>
-      <label>
-        Color
-        <select id="filterStatus">
-          <option value="">Todos</option>
-          <option value="rojo">Rojo</option>
-          <option value="azul">Azul</option>
-          <option value="neutral">Neutral</option>
-        </select>
-      </label>
-      <label style="justify-content:flex-end;">
-        <span>&nbsp;</span>
-        <button class="btn btn-primary" onclick="loadAnalytics()">Analizar</button>
-      </label>
-    </div>
-  </div>
-
-  <!-- Resultados de Análisis -->
-  <div class="card" style="margin-bottom:12px; display:none;" id="analyticsCard">
-    <h3>Resultados de Actividad (logs históricos)</h3>
-    <div class="metric-help">
-      Estos números cuentan <strong>eventos en logs</strong>, no predios únicos.
-      Si un predio cambió varias veces, se cuenta varias veces.
-      El resultado depende de los filtros de Mes, Sección y Color.
-    </div>
-    <div id="analyticsSummary" style="margin:8px 0; font-size:14px;"></div>
-    <table id="analyticsTable">
-      <thead><tr><th>Mes</th><th>Sección</th><th>Status</th><th>Usuario</th><th>Total</th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-  <!-- Análisis de Actividad -->
-  <h2 style="margin: 24px 0 12px 0;">Análisis de Seccionales</h2>
-
-  <!-- Botones de Acceso Rápido -->
-  <div class="card" style="margin-bottom:12px;">
-    <h3 style="margin:0 0 12px 0;">Acceso Rápido a Análisis</h3>
-    <div class="btn-group">
-      <button class="btn btn-primary" onclick="loadMostActive()" title="Actualizar gráfico de seccionales más activos">
-        🔄 Actualizar Más Activos
-      </button>
-      <button class="btn btn-primary" onclick="openEndpoint('/analytics/most-active')" title="Ver datos JSON en nueva pestaña">
-        📊 Ver JSON Más Activos
-      </button>
-      <button class="btn btn-primary" onclick="loadInactive()" title="Actualizar lista de seccionales inactivos">
-        🔄 Actualizar Inactivos
-      </button>
-      <button class="btn btn-primary" onclick="openEndpoint('/analytics/inactive')" title="Ver datos JSON en nueva pestaña">
-        📊 Ver JSON Inactivos
-      </button>
-      <button class="btn btn-primary" onclick="loadColorBalance()" title="Actualizar balance de rojos vs azules">
-        🔄 Actualizar Balance Colores
-      </button>
-      <button class="btn btn-primary" onclick="openEndpoint('/analytics/color-balance')" title="Ver datos JSON en nueva pestaña">
-        📊 Ver JSON Balance
-      </button>
-      <button class="btn btn-primary" onclick="openEndpoint('/analytics/summary')" title="Ver resumen general">
-        📈 Ver Resumen General
-      </button>
-      <button class="btn btn-primary" onclick="loadSeccionalAnalytics()" title="Actualizar todos los gráficos">
-        🔄 Actualizar Todo
-      </button>
-    </div>
-  </div>
-
-  <div class="grid">
-    <!-- Seccionales Más Activos -->
-    <div class="card">
-      <h3>Seccionales Más Activos</h3>
-      <div class="chart-container">
-        <canvas id="chartMostActive"></canvas>
+  <details class="fold">
+    <summary>Actividad histórica y análisis avanzado (detalle técnico)</summary>
+    <div class="card" style="margin:12px 0;">
+      <h3 style="margin:0 0 12px 0;">Análisis de Datos</h3>
+      <div class="filters">
+        <label>
+          Mes
+          <input type="month" id="filterMonth" placeholder="2026-01">
+        </label>
+        <label>
+          Sección
+          <input type="text" id="filterSeccion" placeholder="356">
+        </label>
+        <label>
+          Color
+          <select id="filterStatus">
+            <option value="">Todos</option>
+            <option value="rojo">Rojo</option>
+            <option value="azul">Azul</option>
+            <option value="neutral">Neutral</option>
+          </select>
+        </label>
+        <label style="justify-content:flex-end;">
+          <span>&nbsp;</span>
+          <button class="btn btn-primary" onclick="loadAnalytics()">Analizar</button>
+        </label>
       </div>
     </div>
 
-    <!-- Seccionales Inactivos -->
-    <div class="card">
-      <h3>Seccionales Inactivos</h3>
-      <div class="stats-box">
-        <div class="stat">
-          <div class="number" style="color:#16a34a;" id="statActivas">-</div>
-          <div class="label">Activas</div>
+    <div class="card" style="margin-bottom:12px; display:none;" id="analyticsCard">
+      <h3>Resultados de Actividad (logs históricos)</h3>
+      <div class="metric-help">Eventos en logs; un predio puede aparecer varias veces.</div>
+      <div id="analyticsSummary" style="margin:8px 0; font-size:14px;"></div>
+      <table id="analyticsTable">
+        <thead><tr><th>Mes</th><th>Sección</th><th>Status</th><th>Usuario</th><th>Total</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card" style="margin-bottom:12px;">
+      <h3 style="margin:0 0 12px 0;">Acceso Rápido a Análisis</h3>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="loadMostActive()" title="Actualizar gráfico de seccionales más activos">🔄 Actualizar Más Activos</button>
+        <button class="btn btn-primary" onclick="openEndpoint('/analytics/most-active')" title="Ver datos JSON en nueva pestaña">📊 Ver JSON Más Activos</button>
+        <button class="btn btn-primary" onclick="loadInactive()" title="Actualizar lista de seccionales inactivos">🔄 Actualizar Inactivos</button>
+        <button class="btn btn-primary" onclick="openEndpoint('/analytics/inactive')" title="Ver datos JSON en nueva pestaña">📊 Ver JSON Inactivos</button>
+        <button class="btn btn-primary" onclick="loadColorBalance()" title="Actualizar balance de rojos vs azules">🔄 Actualizar Balance Colores</button>
+        <button class="btn btn-primary" onclick="openEndpoint('/analytics/color-balance')" title="Ver datos JSON en nueva pestaña">📊 Ver JSON Balance</button>
+        <button class="btn btn-primary" onclick="openEndpoint('/analytics/summary')" title="Ver resumen general">📈 Ver Resumen General</button>
+        <button class="btn btn-primary" onclick="loadSeccionalAnalytics()" title="Actualizar todos los gráficos">🔄 Actualizar Todo</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Seccionales Más Activos</h3>
+        <div class="chart-container"><canvas id="chartMostActive"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Seccionales Inactivos</h3>
+        <div class="stats-box">
+          <div class="stat"><div class="number" style="color:#16a34a;" id="statActivas">-</div><div class="label">Activas</div></div>
+          <div class="stat"><div class="number" style="color:#dc2626;" id="statInactivas">-</div><div class="label">Inactivas</div></div>
         </div>
-        <div class="stat">
-          <div class="number" style="color:#dc2626;" id="statInactivas">-</div>
-          <div class="label">Inactivas</div>
-        </div>
-      </div>
-      <div id="inactiveList" class="inactive-list"></div>
-    </div>
-  </div>
-
-  <!-- Balance de Colores -->
-  <div class="card" style="margin:12px 0;">
-    <h3>Balance Rojos vs Azules por Seccional</h3>
-    <div class="chart-container" style="height:400px;">
-      <canvas id="chartColorBalance"></canvas>
-    </div>
-  </div>
-
-  <!-- Comparativa -->
-  <div class="grid">
-    <div class="card">
-      <h3>Seccionales con Más Rojos</h3>
-      <div class="chart-container">
-        <canvas id="chartMasRojos"></canvas>
+        <div id="inactiveList" class="inactive-list"></div>
       </div>
     </div>
-    <div class="card">
-      <h3>Seccionales con Más Azules</h3>
-      <div class="chart-container">
-        <canvas id="chartMasAzules"></canvas>
+
+    <div class="card" style="margin:12px 0;">
+      <h3>Balance Rojos vs Azules por Seccional</h3>
+      <div class="chart-container" style="height:400px;"><canvas id="chartColorBalance"></canvas></div>
+    </div>
+
+    <div class="grid">
+      <div class="card"><h3>Seccionales con Más Rojos</h3><div class="chart-container"><canvas id="chartMasRojos"></canvas></div></div>
+      <div class="card"><h3>Seccionales con Más Azules</h3><div class="chart-container"><canvas id="chartMasAzules"></canvas></div></div>
+    </div>
+  </details>
+
+  <details class="fold">
+    <summary>Ver detalle técnico operativo (tablas base)</summary>
+    <div class="grid" style="margin-top:12px;">
+      <div class="card">
+        <h3>Totales por sección</h3>
+        <table id="statsTable">
+          <thead><tr><th>Sección</th><th>Rojo</th><th>Azul</th><th>Neutral</th><th>Total</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>Usuarios</h3>
+        <table id="usersTable">
+          <thead><tr><th>Usuario</th><th>Último acceso</th><th>Secciones</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="card" style="grid-column: 1 / -1;">
+        <h3>Actividad reciente</h3>
+        <table id="activityTable">
+          <thead><tr><th>Predio</th><th>Status</th><th>Sección</th><th>Usuario</th><th>Fecha</th></tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
-  </div>
-
-  <h2 style="margin: 24px 0 12px 0;">Datos Generales</h2>
-
-  <div class="grid">
-    <div class="card">
-      <h3>Totales por sección</h3>
-      <table id="statsTable">
-        <thead><tr><th>Sección</th><th>Rojo</th><th>Azul</th><th>Neutral</th><th>Total</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div class="card">
-      <h3>Usuarios</h3>
-      <table id="usersTable">
-        <thead><tr><th>Usuario</th><th>Último acceso</th><th>Secciones</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div class="card" style="grid-column: 1 / -1;">
-      <h3>Actividad reciente</h3>
-      <table id="activityTable">
-        <thead><tr><th>Predio</th><th>Status</th><th>Sección</th><th>Usuario</th><th>Fecha</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
+  </details>
 
   <script>
     // Config: usa las mismas constantes que en index.html
