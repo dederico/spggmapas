@@ -787,17 +787,25 @@ app.get('/secciones/progreso-periodo', auth, async (req, res) => {
     }
 
     const { rows } = await pool.query(`
+      with ultimo_estado_periodo as (
+        select distinct on (seccion, id_predio)
+          seccion,
+          id_predio,
+          status
+        from predio_logs
+        where seccion is not null
+          and created_at >= $1::date
+          and created_at < ($2::date + interval '1 day')
+          ${seccionFilter}
+        order by seccion, id_predio, created_at desc, id desc
+      )
       select
         seccion,
-        count(distinct id_predio) as visitados_periodo,
-        count(distinct id_predio) filter (where status = 'rojo') as pintados_rojo,
-        count(distinct id_predio) filter (where status = 'azul') as pintados_azul,
-        count(distinct id_predio) filter (where status = 'neutral') as pintados_gris
-      from predio_logs
-      where seccion is not null
-        and created_at >= $1::date
-        and created_at < ($2::date + interval '1 day')
-        ${seccionFilter}
+        count(*) as visitados_periodo,
+        count(*) filter (where status = 'rojo') as pintados_rojo,
+        count(*) filter (where status = 'azul') as pintados_azul,
+        count(*) filter (where status = 'neutral') as pintados_gris
+      from ultimo_estado_periodo
       group by seccion
       order by seccion
     `, params);
