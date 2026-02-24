@@ -164,6 +164,52 @@
     </table>
   </div>
 
+  <!-- PROGRESO POR PERIODO -->
+  <div class="card" style="margin-bottom:12px;">
+    <h3 style="margin:0 0 12px 0;">Progreso por periodo (contra total de predios)</h3>
+    <div class="metric-help">
+      Esta tabla mide lo caminado entre fecha de inicio y final, comparado contra el total de predios de cada sección.
+      "Visitados en el periodo" y pintados por color se calculan sobre logs del rango seleccionado.
+    </div>
+    <div class="filters">
+      <label>
+        Fecha inicio
+        <input type="date" id="periodoInicio">
+      </label>
+      <label>
+        Fecha fin
+        <input type="date" id="periodoFin">
+      </label>
+      <label>
+        Sección (opcional)
+        <input type="text" id="periodoSeccion" placeholder="356">
+      </label>
+      <label style="justify-content:flex-end;">
+        <span>&nbsp;</span>
+        <button class="btn btn-primary" onclick="loadProgresoPeriodo()">Calcular periodo</button>
+      </label>
+    </div>
+    <div id="periodoResumen" style="margin:8px 0; font-size:14px; color:#0f172a;"></div>
+    <table id="periodoTable">
+      <thead>
+        <tr>
+          <th>Sección</th>
+          <th>Total de Predios</th>
+          <th>Mes de análisis</th>
+          <th>Total de Predios que se visitaron en el periodo</th>
+          <th>Total de Predios que se pintaron de rojo</th>
+          <th>Total de Predios que se pintaron de azul</th>
+          <th>Total de Predios que se pintaron de gris</th>
+          <th>Porcentaje entre el total y el progreso</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="chart-container" style="height:360px; margin-top:12px;">
+      <canvas id="chartPeriodo"></canvas>
+    </div>
+  </div>
+
   <!-- Filtros de Análisis -->
   <div class="card" style="margin-bottom:12px;">
     <h3 style="margin:0 0 12px 0;">Análisis de Datos</h3>
@@ -645,6 +691,7 @@
     let chartColorBalance = null;
     let chartMasRojos = null;
     let chartMasAzules = null;
+    let chartPeriodo = null;
 
     // Cargar seccionales más activos
     async function loadMostActive() {
@@ -890,6 +937,92 @@
       }
     }
 
+    function initPeriodoFiltros() {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const inicioMes = `${yyyy}-${mm}-01`;
+      const hoy = `${yyyy}-${mm}-${dd}`;
+      document.getElementById('periodoInicio').value = inicioMes;
+      document.getElementById('periodoFin').value = hoy;
+    }
+
+    async function loadProgresoPeriodo() {
+      const inicio = document.getElementById('periodoInicio').value;
+      const fin = document.getElementById('periodoFin').value;
+      const seccion = document.getElementById('periodoSeccion').value.trim();
+      const resumenEl = document.getElementById('periodoResumen');
+      const tbody = document.querySelector('#periodoTable tbody');
+
+      if (!inicio || !fin) {
+        alert('Debes seleccionar fecha de inicio y fecha final.');
+        return;
+      }
+
+      const params = new URLSearchParams({ start: inicio, end: fin });
+      if (seccion) params.append('seccion', seccion);
+
+      try {
+        const data = await fetchJSON(`/secciones/progreso-periodo?${params.toString()}`);
+        const rows = data.detalle || [];
+        tbody.innerHTML = '';
+
+        const r = data.resumen;
+        resumenEl.innerHTML = `
+          <strong>Resumen del periodo:</strong>
+          ${r.visitados_periodo.toLocaleString()} visitados |
+          <span class="badge rojo">${r.pintados_rojo.toLocaleString()} rojos</span>
+          <span class="badge azul">${r.pintados_azul.toLocaleString()} azules</span>
+          <span class="badge neutral">${r.pintados_gris.toLocaleString()} grises</span> |
+          ${r.porcentaje_avance_periodo.toFixed(2)}% avance del periodo contra total
+        `;
+
+        rows.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>${row.seccion}</strong></td>
+            <td>${Number(row.total_predios || 0).toLocaleString()}</td>
+            <td>${row.mes_analisis}</td>
+            <td>${Number(row.visitados_periodo || 0).toLocaleString()}</td>
+            <td><span class="badge rojo">${Number(row.pintados_rojo || 0).toLocaleString()}</span></td>
+            <td><span class="badge azul">${Number(row.pintados_azul || 0).toLocaleString()}</span></td>
+            <td><span class="badge neutral">${Number(row.pintados_gris || 0).toLocaleString()}</span></td>
+            <td><strong>${Number(row.porcentaje_avance_periodo || 0).toFixed(2)}%</strong></td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        const topRows = [...rows]
+          .sort((a, b) => Number(b.porcentaje_avance_periodo || 0) - Number(a.porcentaje_avance_periodo || 0))
+          .slice(0, 20);
+        const ctx = document.getElementById('chartPeriodo');
+        if (chartPeriodo) chartPeriodo.destroy();
+        chartPeriodo = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: topRows.map(rw => rw.seccion),
+            datasets: [{
+              label: '% avance del periodo',
+              data: topRows.map(rw => Number(rw.porcentaje_avance_periodo || 0)),
+              backgroundColor: '#3b82f6'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: true } },
+            scales: {
+              y: { beginAtZero: true, max: 100, ticks: { callback: (v) => `${v}%` } }
+            }
+          }
+        });
+      } catch (err) {
+        console.error('Error cargando progreso por periodo:', err);
+        resumenEl.textContent = `Error: ${err.message}`;
+      }
+    }
+
     async function loadUltimoCorte() {
       const statusEl = document.getElementById('corteStatus');
       try {
@@ -924,14 +1057,17 @@
     }
 
     // Cargar todo
+    initPeriodoFiltros();
     loadAll();
     loadSeccionalAnalytics();
     loadResumen();
+    loadProgresoPeriodo();
     loadUltimoCorte();
     setInterval(() => {
       loadAll();
       loadSeccionalAnalytics();
       loadResumen();
+      loadProgresoPeriodo();
       loadUltimoCorte();
     }, 60000);
   </script>

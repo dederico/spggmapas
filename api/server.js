@@ -767,6 +767,113 @@ app.get('/secciones/resumen', auth, async (req, res) => {
   }
 });
 
+// GET /secciones/progreso-periodo?start=2026-01-01&end=2026-02-29&seccion=356
+// Mide avance por periodo usando logs, comparado contra el total de predios por sección
+app.get('/secciones/progreso-periodo', auth, async (req, res) => {
+  const { start, end, seccion } = req.query;
+
+  if (!start || !end) {
+    return res.status(400).json({ error: 'start y end son requeridos (YYYY-MM-DD)' });
+  }
+
+  try {
+    const totalesPorSeccion = cargarTotalesPorSeccion();
+    const params = [start, end];
+    let seccionFilter = '';
+
+    if (seccion) {
+      seccionFilter = ' and seccion = $3 ';
+      params.push(seccion);
+    }
+
+    const { rows } = await pool.query(`
+      select
+        seccion,
+        count(distinct id_predio) as visitados_periodo,
+        count(distinct id_predio) filter (where status = 'rojo') as pintados_rojo,
+        count(distinct id_predio) filter (where status = 'azul') as pintados_azul,
+        count(distinct id_predio) filter (where status = 'neutral') as pintados_gris
+      from predio_logs
+      where seccion is not null
+        and created_at >= $1::date
+        and created_at < ($2::date + interval '1 day')
+        ${seccionFilter}
+      group by seccion
+      order by seccion
+    `, params);
+
+    const dataBySeccion = new Map(
+      rows.map(r => [String(r.seccion), {
+        visitados_periodo: parseInt(r.visitados_periodo, 10) || 0,
+        pintados_rojo: parseInt(r.pintados_rojo, 10) || 0,
+        pintados_azul: parseInt(r.pintados_azul, 10) || 0,
+        pintados_gris: parseInt(r.pintados_gris, 10) || 0
+      }])
+    );
+
+    const seccionesBase = seccion
+      ? [String(seccion)]
+      : Array.from({ length: 62 }, (_, idx) => String(356 + idx));
+
+    const detalle = seccionesBase
+      .filter(sec => totalesPorSeccion[sec])
+      .map(sec => {
+        const totalPredios = Number(totalesPorSeccion[sec]) || 0;
+        const row = dataBySeccion.get(sec) || {
+          visitados_periodo: 0,
+          pintados_rojo: 0,
+          pintados_azul: 0,
+          pintados_gris: 0
+        };
+        const porcentaje = totalPredios > 0
+          ? Number(((row.visitados_periodo / totalPredios) * 100).toFixed(2))
+          : 0;
+
+        return {
+          seccion: sec,
+          total_predios: totalPredios,
+          mes_analisis: `${start} a ${end}`,
+          visitados_periodo: row.visitados_periodo,
+          pintados_rojo: row.pintados_rojo,
+          pintados_azul: row.pintados_azul,
+          pintados_gris: row.pintados_gris,
+          porcentaje_avance_periodo: porcentaje
+        };
+      })
+      .sort((a, b) => parseInt(a.seccion, 10) - parseInt(b.seccion, 10));
+
+    const resumen = detalle.reduce((acc, r) => {
+      acc.total_predios += r.total_predios;
+      acc.visitados_periodo += r.visitados_periodo;
+      acc.pintados_rojo += r.pintados_rojo;
+      acc.pintados_azul += r.pintados_azul;
+      acc.pintados_gris += r.pintados_gris;
+      return acc;
+    }, {
+      total_predios: 0,
+      visitados_periodo: 0,
+      pintados_rojo: 0,
+      pintados_azul: 0,
+      pintados_gris: 0
+    });
+
+    resumen.mes_analisis = `${start} a ${end}`;
+    resumen.porcentaje_avance_periodo = resumen.total_predios > 0
+      ? Number(((resumen.visitados_periodo / resumen.total_predios) * 100).toFixed(2))
+      : 0;
+
+    res.json({
+      ok: true,
+      filtros: { start, end, seccion: seccion || null },
+      resumen,
+      detalle
+    });
+  } catch (err) {
+    console.error('[GET /secciones/progreso-periodo] ERROR:', err);
+    res.status(500).json({ error: 'db_error', message: err.message });
+  }
+});
+
 // POST /cortes/generar -> crea corte oficial desde estado actual (tabla predios)
 app.post('/cortes/generar', auth, async (req, res) => {
   const usuario = req.body?.usuario || 'sistema';
