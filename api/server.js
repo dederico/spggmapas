@@ -519,12 +519,20 @@ app.get('/admin/reset-audit', auth, async (req, res) => {
   }
 });
 
-// GET /secciones/totales -> obtener total de predios por sección mediante intersección espacial
-app.get('/secciones/totales', auth, async (req, res) => {
+// Caché para totales de predios por sección (se calcula una vez al inicio)
+let totalesPrediosCache = null;
+
+function calcularTotalesPorSeccion() {
+  if (totalesPrediosCache) {
+    return totalesPrediosCache;
+  }
+
   try {
     const fs = require('fs');
     const path = require('path');
     const turf = require('@turf/turf');
+
+    console.log('[calcularTotalesPorSeccion] Iniciando cálculo espacial...');
 
     // Leer archivo de secciones (polígonos del INE)
     const seccionesPath = path.join(__dirname, '../data/secciones_spgg.geojson');
@@ -534,7 +542,6 @@ app.get('/secciones/totales', auth, async (req, res) => {
     const prediosPath = path.join(__dirname, '../data/predios_wgs84.geojson');
     const predios = JSON.parse(fs.readFileSync(prediosPath, 'utf8'));
 
-    // Contar predios por sección mediante intersección espacial
     const totalesPorSeccion = {};
 
     // Inicializar contador para cada sección
@@ -544,13 +551,17 @@ app.get('/secciones/totales', auth, async (req, res) => {
     }
 
     // Contar predios en cada sección
+    let procesados = 0;
     for (const predio of predios.features) {
-      // Extraer punto del predio (puede ser punto o polígono)
+      procesados++;
+      if (procesados % 5000 === 0) {
+        console.log(`[calcularTotalesPorSeccion] Procesados ${procesados}/${predios.features.length} predios...`);
+      }
+
       let punto;
       if (predio.geometry.type === 'Point') {
         punto = predio;
       } else if (predio.geometry.type === 'Polygon' || predio.geometry.type === 'MultiPolygon') {
-        // Usar el centroide si es un polígono
         punto = turf.centroid(predio);
       } else {
         continue;
@@ -562,18 +573,28 @@ app.get('/secciones/totales', auth, async (req, res) => {
           if (turf.booleanPointInPolygon(punto, seccionFeature)) {
             const seccionNum = String(seccionFeature.properties.SECCION);
             totalesPorSeccion[seccionNum]++;
-            break; // Un predio solo puede estar en una sección
+            break;
           }
         } catch (e) {
-          // Ignorar errores de geometría inválida
           continue;
         }
       }
     }
 
-    console.log('[GET /secciones/totales] Secciones procesadas:', Object.keys(totalesPorSeccion).length);
+    console.log('[calcularTotalesPorSeccion] ✅ Cálculo completado');
+    totalesPrediosCache = totalesPorSeccion;
+    return totalesPorSeccion;
+  } catch (err) {
+    console.error('[calcularTotalesPorSeccion] ERROR:', err);
+    throw err;
+  }
+}
 
-    // Convertir a array ordenado
+// GET /secciones/totales -> obtener total de predios por sección (usa caché)
+app.get('/secciones/totales', auth, async (req, res) => {
+  try {
+    const totalesPorSeccion = calcularTotalesPorSeccion();
+
     const resultado = Object.entries(totalesPorSeccion)
       .map(([seccion, total]) => ({ seccion, total_predios: total }))
       .sort((a, b) => {
@@ -614,50 +635,8 @@ app.get('/secciones/progreso', auth, async (req, res) => {
 // GET /secciones/resumen -> combina totales y progreso con porcentajes (SIN vueltas)
 app.get('/secciones/resumen', auth, async (req, res) => {
   try {
-    const fs = require('fs');
-    const path = require('path');
-    const turf = require('@turf/turf');
-
-    // Obtener totales mediante intersección espacial
-    const seccionesPath = path.join(__dirname, '../data/secciones_spgg.geojson');
-    const secciones = JSON.parse(fs.readFileSync(seccionesPath, 'utf8'));
-
-    const prediosPath = path.join(__dirname, '../data/predios_wgs84.geojson');
-    const predios = JSON.parse(fs.readFileSync(prediosPath, 'utf8'));
-
-    const totalesPorSeccion = {};
-
-    // Inicializar contador para cada sección
-    for (const seccionFeature of secciones.features) {
-      const seccionNum = String(seccionFeature.properties.SECCION);
-      totalesPorSeccion[seccionNum] = 0;
-    }
-
-    // Contar predios en cada sección
-    for (const predio of predios.features) {
-      let punto;
-      if (predio.geometry.type === 'Point') {
-        punto = predio;
-      } else if (predio.geometry.type === 'Polygon' || predio.geometry.type === 'MultiPolygon') {
-        punto = turf.centroid(predio);
-      } else {
-        continue;
-      }
-
-      for (const seccionFeature of secciones.features) {
-        try {
-          if (turf.booleanPointInPolygon(punto, seccionFeature)) {
-            const seccionNum = String(seccionFeature.properties.SECCION);
-            totalesPorSeccion[seccionNum]++;
-            break;
-          }
-        } catch (e) {
-          continue;
-        }
-      }
-    }
-
-    console.log('[GET /secciones/resumen] Total secciones procesadas:', Object.keys(totalesPorSeccion).length);
+    // Obtener totales desde caché
+    const totalesPorSeccion = calcularTotalesPorSeccion();
 
     // Obtener progreso de la BD
     const { rows } = await pool.query(`
@@ -722,6 +701,15 @@ app.get('/secciones/resumen', auth, async (req, res) => {
 
 initTables()
   .then(() => {
+    // Pre-calcular totales de predios por sección al iniciar
+    console.log('🔄 Pre-calculando totales de predios por sección...');
+    try {
+      calcularTotalesPorSeccion();
+      console.log('✅ Totales pre-calculados correctamente');
+    } catch (err) {
+      console.error('⚠️  Error al pre-calcular totales (el cálculo se hará en el primer request):', err.message);
+    }
+
     app.listen(PORT, () => console.log(`API escuchando en puerto ${PORT}`));
   })
   .catch(err => {
