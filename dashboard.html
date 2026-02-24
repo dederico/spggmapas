@@ -586,6 +586,26 @@
         `;
         summary.style.color = '#0f172a';
 
+        // Referencia comparativa con estado real actual para evitar confusiones
+        if (seccion) {
+          try {
+            const resumenReal = await fetchJSON('/secciones/resumen');
+            const real = resumenReal.find(r => String(r.seccion) === String(seccion));
+            if (real) {
+              summary.innerHTML += `
+                <br><small style="color:#475569;">
+                  Estado real actual sección ${seccion}: ${Number(real.predios_trabajados || 0).toLocaleString()} trabajados únicos,
+                  ${Number(real.total_rojos || 0).toLocaleString()} rojos,
+                  ${Number(real.total_azules || 0).toLocaleString()} azules,
+                  ${Number(real.total_neutrales || 0).toLocaleString()} neutrales.
+                </small>
+              `;
+            }
+          } catch (err) {
+            console.error('No se pudo cargar referencia de estado real:', err);
+          }
+        }
+
         // Llenar tabla
         data.forEach(row => {
           const tr = document.createElement('tr');
