@@ -547,6 +547,51 @@ function cargarTotalesPorSeccion() {
   }
 }
 
+// GET /health/totales -> endpoint público de health check (SIN auth)
+app.get('/health/totales', async (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+
+  try {
+    const totalesPath = path.join(__dirname, '../data/totales_por_seccion.json');
+
+    // Verificar si existe
+    const exists = fs.existsSync(totalesPath);
+    if (!exists) {
+      return res.json({
+        status: 'ERROR',
+        error: 'FILE_NOT_FOUND',
+        path: totalesPath,
+        cwd: __dirname,
+        files_in_data: fs.existsSync(path.join(__dirname, '../data'))
+          ? fs.readdirSync(path.join(__dirname, '../data'))
+          : 'data folder not found'
+      });
+    }
+
+    // Intentar leer
+    const content = fs.readFileSync(totalesPath, 'utf8');
+    const data = JSON.parse(content);
+
+    res.json({
+      status: 'OK',
+      path: totalesPath,
+      fileSize: content.length,
+      secciones: Object.keys(data).length,
+      totalPredios: Object.values(data).reduce((a,b) => a+b, 0),
+      sample: Object.entries(data).slice(0, 3),
+      cacheLoaded: totalesPrediosCache !== null
+    });
+  } catch (err) {
+    res.json({
+      status: 'ERROR',
+      error: 'LOAD_ERROR',
+      message: err.message,
+      stack: err.stack
+    });
+  }
+});
+
 // GET /debug/totales -> endpoint de debug para verificar carga de archivo
 app.get('/debug/totales', auth, async (req, res) => {
   const fs = require('fs');
