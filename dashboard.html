@@ -171,6 +171,32 @@
     </table>
   </div>
 
+  <!-- RESUMEN POR MES -->
+  <div class="card" style="margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h3 style="margin:0;">Resumen por Mes</h3>
+      <button class="btn btn-primary" onclick="loadResumenMensual()">🔄 Actualizar</button>
+    </div>
+    <div class="metric-help">Predios únicos visitados por mes con su último color en ese mes. Basado en historial de logs.</div>
+    <table id="mensualTable">
+      <thead>
+        <tr>
+          <th>Mes</th>
+          <th>Total Predios</th>
+          <th>Visitados en el mes</th>
+          <th>% del total</th>
+          <th>Rojos</th>
+          <th>Azules</th>
+          <th>Grises</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="chart-container" style="height:300px; margin-top:16px;">
+      <canvas id="chartMensual"></canvas>
+    </div>
+  </div>
+
   <!-- PROGRESO POR PERIODO -->
   <div class="card" style="margin-bottom:12px;">
     <h3 style="margin:0 0 12px 0;">Progreso por periodo (contra total de predios)</h3>
@@ -649,6 +675,7 @@
     let chartMasRojos = null;
     let chartMasAzules = null;
     let chartPeriodo = null;
+    let chartMensual = null;
 
     // Cargar seccionales más activos
     async function loadMostActive() {
@@ -894,6 +921,55 @@
       }
     }
 
+    async function loadResumenMensual() {
+      try {
+        const data = await fetchJSON('/secciones/resumen-mensual');
+        const meses = data.meses || [];
+
+        const tbody = document.querySelector('#mensualTable tbody');
+        tbody.innerHTML = '';
+
+        meses.forEach(m => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>${m.mes}</strong></td>
+            <td>${Number(m.total_predios).toLocaleString()}</td>
+            <td>${Number(m.visitados_mes).toLocaleString()}</td>
+            <td><strong>${m.porcentaje_avance.toFixed(2)}%</strong></td>
+            <td><span class="badge rojo">${Number(m.pintados_rojo).toLocaleString()}</span></td>
+            <td><span class="badge azul">${Number(m.pintados_azul).toLocaleString()}</span></td>
+            <td><span class="badge neutral">${Number(m.pintados_gris).toLocaleString()}</span></td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        const ctx = document.getElementById('chartMensual');
+        if (chartMensual) chartMensual.destroy();
+        chartMensual = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: meses.map(m => m.mes),
+            datasets: [
+              { label: 'Azules', data: meses.map(m => m.pintados_azul), backgroundColor: '#3b82f6' },
+              { label: 'Rojos', data: meses.map(m => m.pintados_rojo), backgroundColor: '#ef4444' },
+              { label: 'Grises', data: meses.map(m => m.pintados_gris), backgroundColor: '#9ca3af' }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: true } },
+            scales: {
+              x: { stacked: true },
+              y: { stacked: true, beginAtZero: true }
+            }
+          }
+        });
+      } catch (err) {
+        console.error('Error cargando resumen mensual:', err);
+      }
+    }
+
     function initPeriodoFiltros() {
       const now = new Date();
       const yyyy = now.getFullYear();
@@ -1018,12 +1094,14 @@
     loadAll();
     loadSeccionalAnalytics();
     loadResumen();
+    loadResumenMensual();
     loadProgresoPeriodo();
     loadUltimoCorte();
     setInterval(() => {
       loadAll();
       loadSeccionalAnalytics();
       loadResumen();
+      loadResumenMensual();
       loadProgresoPeriodo();
       loadUltimoCorte();
     }, 60000);

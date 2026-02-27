@@ -882,6 +882,52 @@ app.get('/secciones/progreso-periodo', auth, async (req, res) => {
   }
 });
 
+// GET /secciones/resumen-mensual -> resumen por mes desde predio_logs (único por predio por mes)
+app.get('/secciones/resumen-mensual', auth, async (req, res) => {
+  try {
+    const totalesPorSeccion = cargarTotalesPorSeccion();
+    const totalPredios = Object.values(totalesPorSeccion).reduce((s, v) => s + Number(v), 0);
+
+    const { rows } = await pool.query(`
+      with ultimo_estado_mes as (
+        select distinct on (date_trunc('month', created_at), id_predio)
+          date_trunc('month', created_at) as mes,
+          id_predio,
+          status
+        from predio_logs
+        where seccion is not null
+        order by date_trunc('month', created_at), id_predio, created_at desc, id desc
+      )
+      select
+        to_char(mes, 'YYYY-MM') as mes,
+        count(*) as visitados_mes,
+        count(*) filter (where status = 'rojo') as pintados_rojo,
+        count(*) filter (where status = 'azul') as pintados_azul,
+        count(*) filter (where status = 'neutral') as pintados_gris
+      from ultimo_estado_mes
+      group by mes
+      order by mes
+    `);
+
+    const meses = rows.map(r => ({
+      mes: r.mes,
+      total_predios: totalPredios,
+      visitados_mes: parseInt(r.visitados_mes, 10) || 0,
+      pintados_rojo: parseInt(r.pintados_rojo, 10) || 0,
+      pintados_azul: parseInt(r.pintados_azul, 10) || 0,
+      pintados_gris: parseInt(r.pintados_gris, 10) || 0,
+      porcentaje_avance: totalPredios > 0
+        ? Number(((parseInt(r.visitados_mes, 10) / totalPredios) * 100).toFixed(2))
+        : 0
+    }));
+
+    res.json({ ok: true, meses });
+  } catch (err) {
+    console.error('[GET /secciones/resumen-mensual] ERROR:', err);
+    res.status(500).json({ error: 'db_error', message: err.message });
+  }
+});
+
 // POST /cortes/generar -> crea corte oficial desde estado actual (tabla predios)
 app.post('/cortes/generar', auth, async (req, res) => {
   const usuario = req.body?.usuario || 'sistema';
