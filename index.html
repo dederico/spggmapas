@@ -236,6 +236,7 @@
         </div>
         <div id="userStatus" style="font-size:12px;color:#065f46;margin-top:4px;"></div>
         <div id="geoStatus" style="font-size:12px;color:#b45309;margin-top:4px;">Candado geográfico: verificando...</div>
+        <button id="geoRetryBtn" type="button" style="display:none;margin-top:6px;font-size:12px;padding:6px 10px;border:1px solid #0ea5e9;color:#0f172a;background:#ecfeff;border-radius:6px;cursor:pointer;">Activar ubicación</button>
       </div>
       <div class="legend-row"><span class="swatch" style="background:#9ca3af"></span>Gris: No abrió</div>
       <div class="legend-row"><span class="swatch" style="background:#1d4ed8"></span>Azul: Abrió y me escuchó</div>
@@ -294,6 +295,7 @@
     const loginBtn = document.getElementById('loginBtn');
     const userStatus = document.getElementById('userStatus');
     const geoStatus = document.getElementById('geoStatus');
+    const geoRetryBtn = document.getElementById('geoRetryBtn');
     const toggleNumbers = document.getElementById('toggleNumbers');
     let panelVisible = true;
     toggleBtn.addEventListener('click', () => {
@@ -319,6 +321,7 @@
     let userLocMarker = null;
     let userLocCircle = null;
     let geoWatchId = null;
+    let geofenceStarted = false;
     const NEARBY_RADIUS_METERS = 50; // radio máximo para permitir clic sobre un predio
 
     function loadStatus() {
@@ -451,6 +454,11 @@
       geoStatus.style.color = color;
     }
 
+    function setGeoRetryVisible(visible) {
+      if (!geoRetryBtn) return;
+      geoRetryBtn.style.display = visible ? 'inline-block' : 'none';
+    }
+
     function updateUserLocation(latlng, accuracy) {
       if (userLocMarker) map.removeLayer(userLocMarker);
       if (userLocCircle) map.removeLayer(userLocCircle);
@@ -566,22 +574,27 @@
       return dist <= NEARBY_RADIUS_METERS;
     }
 
-    function verifyGeofence() {
+    function verifyGeofence(force = false) {
       if (!navigator.geolocation) {
         geofenceAllowed = false;
+        setGeoRetryVisible(false);
         updateGeoStatus('Este navegador no tiene geolocalización: edición bloqueada', '#b91c1c');
         return;
       }
+      if (geoWatchId && !force) return;
       if (geoWatchId) {
         navigator.geolocation.clearWatch(geoWatchId);
         geoWatchId = null;
       }
+      geofenceStarted = true;
+      setGeoRetryVisible(false);
       const onSuccess = pos => {
         lastGeolocation = pos.coords;
         const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         updateUserLocation(latlng, pos.coords.accuracy);
         const inside = isLatLngAllowed(latlng);
         geofenceAllowed = !!inside;
+        setGeoRetryVisible(false);
         if (inside) {
           const acc = Math.round(pos.coords.accuracy || 0);
           updateGeoStatus(`Candado geográfico OK: dentro del área · ${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)} · ±${acc}m`, '#065f46');
@@ -592,6 +605,11 @@
       const onError = err => {
         console.warn('Geolocalización falló', err);
         geofenceAllowed = false;
+        setGeoRetryVisible(true);
+        if (err && err.code === 1 && window.top !== window.self) {
+          updateGeoStatus('Ubicación bloqueada en esta página embebida. El iframe debe permitir geolocalización.', '#b91c1c');
+          return;
+        }
         updateGeoStatus('No se pudo obtener ubicación: edición bloqueada', '#b91c1c');
       };
       geoWatchId = navigator.geolocation.watchPosition(onSuccess, onError, { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 });
@@ -807,7 +825,6 @@
             if (g.type === 'MultiPolygon') return g.coordinates.flat();
             return [];
           });
-        verifyGeofence();
       })
       .catch(err => console.error('No se pudo cargar secciones', err));
 
@@ -923,7 +940,6 @@
 
     loadContours();
     loadHillshade();
-    verifyGeofence();
 
     function updateNumberVisibility() {
       if (!geoLayer) return;
@@ -953,8 +969,13 @@
       applySeccionFilter();
       recordLogin(u, allowedSecciones ? [...allowedSecciones].join(',') : '');
       loadRemoteStatuses();
+      if (!geofenceStarted) {
+        updateGeoStatus('Activa tu ubicación para desbloquear la edición', '#b45309');
+      }
+      verifyGeofence(true);
     }
     loginBtn.addEventListener('click', handleLogin);
+    geoRetryBtn.addEventListener('click', () => verifyGeofence(true));
 
     // Event listeners para los botones del modal
     document.querySelectorAll('.modal-btn').forEach(btn => {
