@@ -1,0 +1,471 @@
+{
+  "admin": {
+    "password": "admin",
+    "secciones": [],
+    "role": "admin"
+  },
+  "cla_pad": {
+    "password": "padilla26",
+    "secciones": [],
+    "role": "admin"
+  },
+  "atencionciudadana1": {
+    "password": "atencion2026",
+    "secciones": [
+      "360",
+      "362",
+      "363"
+    ],
+    "role": "user"
+  },
+  "atencionciudadana2": {
+    "password": "atencion2026",
+    "secciones": [
+      "378",
+      "377",
+      "374"
+    ],
+    "role": "user"
+  },
+  "atencionciudadana3": {
+    "password": "atencion2026",
+    "secciones": [
+      "358"
+    ],
+    "role": "user"
+  },
+  "sec356": {
+    "password": "sec356",
+    "secciones": [
+      "356"
+    ],
+    "role": "user"
+  },
+  "sec357": {
+    "password": "sec357",
+    "secciones": [
+      "357"
+    ],
+    "role": "user"
+  },
+  "sec358": {
+    "password": "sec358",
+    "secciones": [
+      "358"
+    ],
+    "role": "user"
+  },
+  "sec359": {
+    "password": "sec359",
+    "secciones": [
+      "359"
+    ],
+    "role": "user"
+  },
+  "sec360": {
+    "password": "sec360",
+    "secciones": [
+      "360"
+    ],
+    "role": "user"
+  },
+  "sec361": {
+    "password": "sec361",
+    "secciones": [
+      "361"
+    ],
+    "role": "user"
+  },
+  "sec362": {
+    "password": "sec362",
+    "secciones": [
+      "362"
+    ],
+    "role": "user"
+  },
+  "sec363": {
+    "password": "sec363",
+    "secciones": [
+      "363"
+    ],
+    "role": "user"
+  },
+  "sec364": {
+    "password": "sec364",
+    "secciones": [
+      "364"
+    ],
+    "role": "user"
+  },
+  "sec365": {
+    "password": "sec365",
+    "secciones": [
+      "365"
+    ],
+    "role": "user"
+  },
+  "sec366": {
+    "password": "sec366",
+    "secciones": [
+      "366"
+    ],
+    "role": "user"
+  },
+  "sec367": {
+    "password": "sec367",
+    "secciones": [
+      "367"
+    ],
+    "role": "user"
+  },
+  "sec368": {
+    "password": "sec368",
+    "secciones": [
+      "368"
+    ],
+    "role": "user"
+  },
+  "sec369": {
+    "password": "sec369",
+    "secciones": [
+      "369"
+    ],
+    "role": "user"
+  },
+  "sec370": {
+    "password": "sec370",
+    "secciones": [
+      "370"
+    ],
+    "role": "user"
+  },
+  "sec371": {
+    "password": "sec371",
+    "secciones": [
+      "371"
+    ],
+    "role": "user"
+  },
+  "sec372": {
+    "password": "sec372",
+    "secciones": [
+      "372"
+    ],
+    "role": "user"
+  },
+  "sec373": {
+    "password": "sec373",
+    "secciones": [
+      "373"
+    ],
+    "role": "user"
+  },
+  "sec374": {
+    "password": "sec374",
+    "secciones": [
+      "374"
+    ],
+    "role": "user"
+  },
+  "sec375": {
+    "password": "sec375",
+    "secciones": [
+      "375"
+    ],
+    "role": "user"
+  },
+  "sec376": {
+    "password": "sec376",
+    "secciones": [
+      "376"
+    ],
+    "role": "user"
+  },
+  "sec377": {
+    "password": "sec377",
+    "secciones": [
+      "377"
+    ],
+    "role": "user"
+  },
+  "sec378": {
+    "password": "sec378",
+    "secciones": [
+      "378"
+    ],
+    "role": "user"
+  },
+  "sec379": {
+    "password": "sec379",
+    "secciones": [
+      "379"
+    ],
+    "role": "user"
+  },
+  "sec380": {
+    "password": "sec380",
+    "secciones": [
+      "380"
+    ],
+    "role": "user"
+  },
+  "sec381": {
+    "password": "sec381",
+    "secciones": [
+      "381"
+    ],
+    "role": "user"
+  },
+  "sec382": {
+    "password": "sec382",
+    "secciones": [
+      "382"
+    ],
+    "role": "user"
+  },
+  "sec383": {
+    "password": "sec383",
+    "secciones": [
+      "383"
+    ],
+    "role": "user"
+  },
+  "sec384": {
+    "password": "sec384",
+    "secciones": [
+      "384"
+    ],
+    "role": "user"
+  },
+  "sec385": {
+    "password": "sec385",
+    "secciones": [
+      "385"
+    ],
+    "role": "user"
+  },
+  "sec386": {
+    "password": "sec386",
+    "secciones": [
+      "386"
+    ],
+    "role": "user"
+  },
+  "sec387": {
+    "password": "sec387",
+    "secciones": [
+      "387"
+    ],
+    "role": "user"
+  },
+  "sec388": {
+    "password": "sec388",
+    "secciones": [
+      "388"
+    ],
+    "role": "user"
+  },
+  "sec389": {
+    "password": "sec389",
+    "secciones": [
+      "389"
+    ],
+    "role": "user"
+  },
+  "sec390": {
+    "password": "sec390",
+    "secciones": [
+      "390"
+    ],
+    "role": "user"
+  },
+  "sec391": {
+    "password": "sec391",
+    "secciones": [
+      "391"
+    ],
+    "role": "user"
+  },
+  "sec392": {
+    "password": "sec392",
+    "secciones": [
+      "392"
+    ],
+    "role": "user"
+  },
+  "sec393": {
+    "password": "sec393",
+    "secciones": [
+      "393"
+    ],
+    "role": "user"
+  },
+  "sec394": {
+    "password": "sec394",
+    "secciones": [
+      "394"
+    ],
+    "role": "user"
+  },
+  "sec395": {
+    "password": "sec395",
+    "secciones": [
+      "395"
+    ],
+    "role": "user"
+  },
+  "sec396": {
+    "password": "sec396",
+    "secciones": [
+      "396"
+    ],
+    "role": "user"
+  },
+  "sec397": {
+    "password": "sec397",
+    "secciones": [
+      "397"
+    ],
+    "role": "user"
+  },
+  "sec398": {
+    "password": "sec398",
+    "secciones": [
+      "398"
+    ],
+    "role": "user"
+  },
+  "sec399": {
+    "password": "sec399",
+    "secciones": [
+      "399"
+    ],
+    "role": "user"
+  },
+  "sec400": {
+    "password": "sec400",
+    "secciones": [
+      "400"
+    ],
+    "role": "user"
+  },
+  "sec401": {
+    "password": "sec401",
+    "secciones": [
+      "401"
+    ],
+    "role": "user"
+  },
+  "sec402": {
+    "password": "sec402",
+    "secciones": [
+      "402"
+    ],
+    "role": "user"
+  },
+  "sec403": {
+    "password": "sec403",
+    "secciones": [
+      "403"
+    ],
+    "role": "user"
+  },
+  "sec404": {
+    "password": "sec404",
+    "secciones": [
+      "404"
+    ],
+    "role": "user"
+  },
+  "sec405": {
+    "password": "sec405",
+    "secciones": [
+      "405"
+    ],
+    "role": "user"
+  },
+  "sec406": {
+    "password": "sec406",
+    "secciones": [
+      "406"
+    ],
+    "role": "user"
+  },
+  "sec407": {
+    "password": "sec407",
+    "secciones": [
+      "407"
+    ],
+    "role": "user"
+  },
+  "sec408": {
+    "password": "sec408",
+    "secciones": [
+      "408"
+    ],
+    "role": "user"
+  },
+  "sec409": {
+    "password": "sec409",
+    "secciones": [
+      "409"
+    ],
+    "role": "user"
+  },
+  "sec410": {
+    "password": "sec410",
+    "secciones": [
+      "410"
+    ],
+    "role": "user"
+  },
+  "sec411": {
+    "password": "sec411",
+    "secciones": [
+      "411"
+    ],
+    "role": "user"
+  },
+  "sec412": {
+    "password": "sec412",
+    "secciones": [
+      "412"
+    ],
+    "role": "user"
+  },
+  "sec413": {
+    "password": "sec413",
+    "secciones": [
+      "413"
+    ],
+    "role": "user"
+  },
+  "sec414": {
+    "password": "sec414",
+    "secciones": [
+      "414"
+    ],
+    "role": "user"
+  },
+  "sec415": {
+    "password": "sec415",
+    "secciones": [
+      "415"
+    ],
+    "role": "user"
+  },
+  "sec416": {
+    "password": "sec416",
+    "secciones": [
+      "416"
+    ],
+    "role": "user"
+  },
+  "sec417": {
+    "password": "sec417",
+    "secciones": [
+      "417"
+    ],
+    "role": "user"
+  }
+}

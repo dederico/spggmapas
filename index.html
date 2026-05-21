@@ -34,6 +34,30 @@
       font-size: 15px;
       font-weight: 700;
     }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .panel-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .panel-brand img {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      border-radius: 8px;
+      flex: 0 0 auto;
+    }
+    .panel-brand h2 {
+      margin: 0;
+      line-height: 1.15;
+    }
     .panel .legend-row {
       display: flex;
       align-items: center;
@@ -194,10 +218,13 @@
   </div>
 
   <div class="panel" id="panel">
-    <h2 style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <span>Predios San Pedro</span>
+    <div class="panel-header">
+      <div class="panel-brand">
+        <img src="building.png" alt="ENSU San Pedro">
+        <h2>ENSU San Pedro - MAYO 2026</h2>
+      </div>
       <button id="togglePanel" style="font-size:12px;padding:4px 8px;border:1px solid #ccc;border-radius:6px;background:#fff;">Ocultar</button>
-    </h2>
+    </div>
     <div id="panelBody">
       <div style="margin-bottom:8px;">
         <label style="font-size:12px;display:block;margin-bottom:4px;">Usuario / Sección</label>
@@ -615,18 +642,31 @@
     const MAX_FEATURES = 12000; // límite por vista para que cargue rápido en móvil
     const SECCIONES_URL = 'data/secciones_spgg.geojson'; // secciones 356-417 recortadas
 
-    // Usuarios: admin y uno por sección (356-417). Usuario secXXX / clave secXXX.
-    const USERS = (() => {
+    function buildFallbackUsers() {
       const base = {
         admin: { password: 'admin', secciones: [], role: 'admin' },
-        cla_pad: { password: 'padilla26', secciones: [], role: 'admin' },
+        cla_pad: { password: 'padilla26', secciones: [], role: 'admin' }
       };
       for (let s = 356; s <= 417; s++) {
         const u = `sec${s}`;
         base[u] = { password: `sec${s}`, secciones: [String(s)], role: 'user' };
       }
       return base;
-    })();
+    }
+
+    let USERS = buildFallbackUsers();
+
+    async function loadUsersConfig() {
+      if (!API_BASE) return;
+      try {
+        const data = await fetchJSON(`${API_BASE}/auth/users`, { method: 'GET' });
+        if (data && typeof data === 'object' && Object.keys(data).length) {
+          USERS = data;
+        }
+      } catch (err) {
+        console.warn('No se pudo cargar configuración remota de usuarios', err);
+      }
+    }
 
     const loadingEl = document.createElement('div');
     loadingEl.style.position = 'absolute';
@@ -735,7 +775,10 @@
         .finally(() => setLoading(false));
     }
 
-    map.whenReady(() => loadPrediosForView());
+    map.whenReady(async () => {
+      await loadUsersConfig();
+      loadPrediosForView();
+    });
     map.on('moveend', () => loadPrediosForView());
 
     // Capa de secciones electorales (recorte SPGG)

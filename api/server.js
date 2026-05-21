@@ -26,6 +26,7 @@ const pool = new Pool({
 });
 
 const app = express();
+const USERS_FILE = path.join(__dirname, 'users.json');
 
 // Configuración CORS mejorada
 app.use(cors({
@@ -36,6 +37,48 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+function buildDefaultUsers() {
+  const base = {
+    admin: { password: 'admin', secciones: [], role: 'admin' },
+    cla_pad: { password: 'padilla26', secciones: [], role: 'admin' }
+  };
+  for (let s = 356; s <= 417; s++) {
+    const u = `sec${s}`;
+    base[u] = { password: `sec${s}`, secciones: [String(s)], role: 'user' };
+  }
+  return base;
+}
+
+function normalizeUsersConfig(raw) {
+  const result = {};
+  for (const [username, conf] of Object.entries(raw || {})) {
+    if (!username || !conf || typeof conf !== 'object') continue;
+    const password = conf.password == null ? '' : String(conf.password);
+    const role = conf.role === 'admin' ? 'admin' : 'user';
+    const secciones = Array.isArray(conf.secciones)
+      ? conf.secciones.map(s => String(s).trim()).filter(Boolean)
+      : [];
+    result[String(username).trim()] = { password, role, secciones };
+  }
+  return result;
+}
+
+function loadUsersConfig() {
+  try {
+    if (!fs.existsSync(USERS_FILE)) {
+      const defaults = buildDefaultUsers();
+      fs.writeFileSync(USERS_FILE, JSON.stringify(defaults, null, 2));
+      return defaults;
+    }
+    const raw = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+    const normalized = normalizeUsersConfig(raw);
+    return Object.keys(normalized).length ? normalized : buildDefaultUsers();
+  } catch (err) {
+    console.error('[GET /auth/users] No se pudo leer users.json, usando defaults', err);
+    return buildDefaultUsers();
+  }
+}
 
 async function initTables() {
   const ddl = [
@@ -112,6 +155,16 @@ function auth(req, res, next) {
 }
 
 app.get('/health', (req, res) => res.json({ ok: true }));
+
+// GET /auth/users -> configuración de usuarios para login en frontend
+app.get('/auth/users', auth, (req, res) => {
+  try {
+    res.json(loadUsersConfig());
+  } catch (err) {
+    console.error('[GET /auth/users] ERROR:', err);
+    res.status(500).json({ error: 'users_config_error' });
+  }
+});
 
 // GET /predios?secciones=356,357
 app.get('/predios', auth, async (req, res) => {
