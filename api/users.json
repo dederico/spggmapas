@@ -12,25 +12,24 @@
   "atencionciudadana1": {
     "password": "atencion2026",
     "secciones": [
-      "360",
-      "362",
-      "363"
+      "358",
+      "367"
     ],
     "role": "user"
   },
   "atencionciudadana2": {
     "password": "atencion2026",
     "secciones": [
-      "378",
-      "377",
-      "374"
+      "371",
+      "372"
     ],
     "role": "user"
   },
   "atencionciudadana3": {
     "password": "atencion2026",
     "secciones": [
-      "358"
+      "371",
+      "372"
     ],
     "role": "user"
   },
