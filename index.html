@@ -235,7 +235,7 @@
           <button id="loginBtn" style="font-size:12px;padding:6px 10px;border:1px solid #2563eb;color:#fff;background:#2563eb;border-radius:6px;">Entrar</button>
         </div>
         <div id="userStatus" style="font-size:12px;color:#065f46;margin-top:4px;"></div>
-        <div id="geoStatus" style="font-size:12px;color:#b45309;margin-top:4px;">Candado geográfico: verificando...</div>
+        <div id="geoStatus" style="font-size:12px;color:#b45309;margin-top:4px;">Inicia sesión y activa tu ubicación para desbloquear la edición</div>
         <button id="geoRetryBtn" type="button" style="display:none;margin-top:6px;font-size:12px;padding:6px 10px;border:1px solid #0ea5e9;color:#0f172a;background:#ecfeff;border-radius:6px;cursor:pointer;">Activar ubicación</button>
       </div>
       <div class="legend-row"><span class="swatch" style="background:#9ca3af"></span>Gris: No abrió</div>
@@ -561,12 +561,14 @@
     }
 
     function ensureGeofence() {
+      if (isAdmin()) return true;
       if (geofenceAllowed) return true;
       updateGeoStatus('Fuera del área permitida o sin geolocalización: edición bloqueada', '#b91c1c');
       return false;
     }
 
     function isNearUser(layer) {
+      if (isAdmin()) return true;
       if (!lastGeolocation) return false;
       const userLL = L.latLng(lastGeolocation.latitude, lastGeolocation.longitude);
       const center = layer.getBounds().getCenter();
@@ -575,6 +577,17 @@
     }
 
     function verifyGeofence(force = false) {
+      if (isAdmin()) {
+        geofenceAllowed = true;
+        geofenceStarted = false;
+        setGeoRetryVisible(false);
+        updateGeoStatus('Admin: edición sin candado geográfico', '#065f46');
+        if (geoWatchId) {
+          navigator.geolocation.clearWatch(geoWatchId);
+          geoWatchId = null;
+        }
+        return;
+      }
       if (!navigator.geolocation) {
         geofenceAllowed = false;
         setGeoRetryVisible(false);
@@ -969,6 +982,10 @@
       applySeccionFilter();
       recordLogin(u, allowedSecciones ? [...allowedSecciones].join(',') : '');
       loadRemoteStatuses();
+      if (isAdmin()) {
+        verifyGeofence(true);
+        return;
+      }
       if (!geofenceStarted) {
         updateGeoStatus('Activa tu ubicación para desbloquear la edición', '#b45309');
       }
